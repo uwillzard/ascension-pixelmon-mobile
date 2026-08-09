@@ -53,7 +53,12 @@ public final class AscensionBootstrap {
         listener.onStatus("Preparando perfil do treinador...", 3);
         PojavApplication.sExecutorService.execute(() -> {
             try {
+                // A conta local (Nick) e o launcher profile são coisas diferentes no Amethyst.
+                // NewJREUtil consulta LauncherProfiles.getCurrentProfile() durante o download
+                // do Minecraft para escolher/instalar Java 21. Sem um launcher profile válido,
+                // o Amethyst lança "The current profile stopped existing :(".
                 ensureLocalAccount(cleanNick, null);
+                ensureLauncherProfile(AscensionConfig.MC_VERSION);
                 ensureMinecraft(cleanNick, launchAfter);
             } catch (Throwable t) {
                 listener.onError(cleanMessage(t), t);
@@ -83,6 +88,9 @@ public final class AscensionBootstrap {
                     }
                 }
                 if (target == null) throw new IllegalStateException("Minecraft 1.21.1 não foi encontrado no manifesto oficial");
+
+                // Defesa extra: garante que o profile atual continua válido antes do NewJREUtil.
+                ensureLauncherProfile(AscensionConfig.MC_VERSION);
 
                 listener.onStatus("Instalando/verificando Minecraft 1.21.1 e Java 21...", 12);
                 new MinecraftDownloader().startForcedDownload(
@@ -187,7 +195,7 @@ public final class AscensionBootstrap {
         prefs.edit().putString("nick", nick).apply();
     }
 
-    private File ensureLauncherProfile(String neoId) {
+    private File ensureLauncherProfile(String versionId) {
         LauncherProfiles.load();
         String savedKey = prefs.getString("launcher_profile_key", "");
         MinecraftProfile profile = savedKey.isEmpty() ? null : LauncherProfiles.mainProfileJson.profiles.get(savedKey);
@@ -211,17 +219,21 @@ public final class AscensionBootstrap {
         String now = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date());
         profile.name = AscensionConfig.PROFILE_NAME;
         profile.type = "custom";
-        profile.lastVersionId = neoId;
+        profile.lastVersionId = versionId;
         profile.gameDir = AscensionConfig.GAME_DIR_NAME;
         if (profile.created == null) profile.created = now;
         profile.lastUsed = now;
 
         LauncherProfiles.mainProfileJson.profiles.put(savedKey, profile);
         LauncherProfiles.write();
+
+        // commit() é intencional aqui: NewJREUtil roda logo em seguida e precisa enxergar
+        // o mesmo profile imediatamente, sem depender da gravação assíncrona de apply().
         LauncherPreferences.DEFAULT_PREF.edit()
                 .putString(LauncherPreferences.PREF_KEY_CURRENT_PROFILE, savedKey)
-                .apply();
-        prefs.edit().putString("launcher_profile_key", savedKey).apply();
+                .commit();
+
+        prefs.edit().putString("launcher_profile_key", savedKey).commit();
 
         File gameDir = new File(Tools.DIR_GAME_HOME, AscensionConfig.GAME_DIR_NAME);
         if (!gameDir.exists()) gameDir.mkdirs();
