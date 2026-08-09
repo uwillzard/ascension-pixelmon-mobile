@@ -62,7 +62,7 @@ public class MainMenuFragment extends Fragment {
             });
 
     public MainMenuFragment() {
-        super(R.layout.fragment_launcher);
+        super(R.layout.fragment_ascension_launcher);
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -71,6 +71,9 @@ public class MainMenuFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         prefs = requireContext().getSharedPreferences(AscensionConfig.PREFS, Activity.MODE_PRIVATE);
         webView = view.findViewById(R.id.ascension_webview);
+        if (webView == null) {
+            throw new IllegalStateException("Ascension WebView ausente no layout fragment_ascension_launcher");
+        }
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
