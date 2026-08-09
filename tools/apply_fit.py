@@ -1874,7 +1874,7 @@ if build_gradle_path.is_file():
 print("[Ascension v0.23] release uwillzard mobile + config/options uma vez + mods por SHA-256 + nome final OK")
 
 # ---------------------------------------------------------------------
-# 11) v0.24 - Perfis COMPLETOS de desempenho para Pixelmon mobile.
+# 11) v0.25 - Perfis seguros de desempenho + correção de Pokémon invisíveis.
 # ---------------------------------------------------------------------
 index = index_path.read_text(encoding="utf-8")
 index = index.replace(
@@ -1884,20 +1884,20 @@ index = index.replace(
 )
 index = index.replace(
     '<p>Reduz a carga da GPU sem mudar o tamanho da interface. Menor resolução costuma dar mais FPS e menos aquecimento.</p>',
-    '<p>Cada perfil ajusta resolução, FPS, distância, partículas e o modo de desempenho do Android/Pojav para reduzir travadas.</p>',
+    '<p>Perfis seguros para Pixelmon: reduzem carga, travadas e aquecimento sem diminuir a distância de renderização dos Pokémon.</p>',
     1
 )
-index = index.replace('LISO · 65%', 'LISO · 50% / 45 FPS')
-index = index.replace('EQUILIBRADO · 75%', 'EQUILIBRADO · 60% / 60 FPS')
-index = index.replace('QUALIDADE · 90%', 'QUALIDADE · 75% / 60 FPS')
+index = index.replace('LISO · 65%', 'LISO · 40% / 40 FPS')
+index = index.replace('EQUILIBRADO · 75%', 'EQUILIBRADO · 50% / 45 FPS')
+index = index.replace('QUALIDADE · 90%', 'QUALIDADE · 65% / 50 FPS')
 index = index.replace('NATIVO · 100%', 'NATIVO · 100% / 60 FPS')
 index_path.write_text(index, encoding="utf-8")
 
 styles = styles_path.read_text(encoding="utf-8")
-if "/* v0.24 - PERFORMANCE PROFILES */" not in styles:
+if "/* v0.25 - SAFE PERFORMANCE PROFILES */" not in styles:
     styles += r"""
 
-/* v0.24 - PERFORMANCE PROFILES */
+/* v0.25 - SAFE PERFORMANCE PROFILES */
 .performance-preset{
   font-size:5.1px!important;
   letter-spacing:.01em!important;
@@ -1911,7 +1911,7 @@ if "/* v0.24 - PERFORMANCE PROFILES */" not in styles:
 appjs = app_js_path.read_text(encoding="utf-8")
 appjs = appjs.replace(
     "memoryMaxMb:6144,resolutionPercent:75};",
-    "memoryMaxMb:6144,resolutionPercent:60,performanceProfile:'balanced',performanceFps:60};",
+    "memoryMaxMb:6144,resolutionPercent:50,performanceProfile:'balanced',performanceFps:45};",
     1
 )
 
@@ -1944,8 +1944,8 @@ old_render = r"""  function renderPerformance(){
 
 """
 new_render = r"""  function renderPerformance(){
-    const value=Math.max(25,Math.min(100,Number(state.resolutionPercent)||60));
-    const fps=Math.max(30,Number(state.performanceFps)||60);
+    const value=Math.max(25,Math.min(100,Number(state.resolutionPercent)||50));
+    const fps=Math.max(30,Number(state.performanceFps)||45);
     const profile=String(state.performanceProfile||'balanced').toLowerCase();
     const label=$('#resolutionValue');
     if(label) label.textContent=value+'% · '+fps+' FPS';
@@ -1969,18 +1969,18 @@ new_render = r"""  function renderPerformance(){
     state.performanceProfile=name;
 
     if(name==='smooth'){
-      state.resolutionPercent=50;
-      state.performanceFps=45;
+      state.resolutionPercent=40;
+      state.performanceFps=40;
     }else if(name==='quality'){
-      state.resolutionPercent=75;
-      state.performanceFps=60;
+      state.resolutionPercent=65;
+      state.performanceFps=50;
     }else if(name==='native'){
       state.resolutionPercent=100;
       state.performanceFps=60;
     }else{
       state.performanceProfile='balanced';
-      state.resolutionPercent=60;
-      state.performanceFps=60;
+      state.resolutionPercent=50;
+      state.performanceFps=45;
     }
 
     renderPerformance();
@@ -1990,7 +1990,7 @@ new_render = r"""  function renderPerformance(){
 
 """
 if old_render not in appjs:
-    raise SystemExit("[Ascension v0.24] funções v0.21 de desempenho não encontradas")
+    raise SystemExit("[Ascension v0.25] funções v0.21 de desempenho não encontradas")
 appjs = appjs.replace(old_render, new_render, 1)
 
 replacements = {
@@ -2005,7 +2005,7 @@ replacements = {
 }
 for old, new in replacements.items():
     if old not in appjs:
-        raise SystemExit("[Ascension v0.24] binding de perfil não encontrado: " + old)
+        raise SystemExit("[Ascension v0.25] binding de perfil não encontrado: " + old)
     appjs = appjs.replace(old, new, 1)
 app_js_path.write_text(appjs, encoding="utf-8")
 
@@ -2013,7 +2013,7 @@ fragment = fragment_path.read_text(encoding="utf-8")
 state_anchor = '                o.put("resolutionPercent", currentResolutionPercent());\n'
 if 'o.put("performanceProfile"' not in fragment:
     if state_anchor not in fragment:
-        raise SystemExit("[Ascension v0.24] estado de resolução não encontrado")
+        raise SystemExit("[Ascension v0.25] estado de resolução não encontrado")
     fragment = fragment.replace(
         state_anchor,
         state_anchor
@@ -2034,7 +2034,7 @@ if "public String setPerformanceProfile(" not in fragment:
 
 """
     if bridge_anchor not in fragment:
-        raise SystemExit("[Ascension v0.24] ponte prepare não encontrada")
+        raise SystemExit("[Ascension v0.25] ponte prepare não encontrada")
     fragment = fragment.replace(bridge_anchor, bridge + bridge_anchor, 1)
 
 helper_anchor = "    private void begin(boolean launchAfter) {\n"
@@ -2053,42 +2053,44 @@ if "private String normalizePerformanceProfile(" not in fragment:
 
     private int performanceResolution(String profile) {
         switch (normalizePerformanceProfile(profile)) {
-            case "smooth": return 50;
-            case "quality": return 75;
+            case "smooth": return 40;
+            case "quality": return 65;
             case "native": return 100;
-            default: return 60;
+            default: return 50;
         }
     }
 
     private int performanceFps(String profile) {
-        return "smooth".equals(normalizePerformanceProfile(profile)) ? 45 : 60;
+        switch (normalizePerformanceProfile(profile)) {
+            case "smooth": return 40;
+            case "quality": return 50;
+            case "native": return 60;
+            default: return 45;
+        }
     }
 
     private int performanceRenderDistance(String profile) {
         switch (normalizePerformanceProfile(profile)) {
-            case "smooth": return 6;
-            case "quality": return 10;
-            case "native": return 12;
-            default: return 8;
-        }
-    }
-
-    private int performanceSimulationDistance(String profile) {
-        switch (normalizePerformanceProfile(profile)) {
-            case "smooth": return 5;
+            case "smooth": return 4;
             case "quality": return 8;
             case "native": return 10;
             default: return 6;
         }
     }
 
-    private String performanceEntityDistance(String profile) {
+    private int performanceSimulationDistance(String profile) {
         switch (normalizePerformanceProfile(profile)) {
-            case "smooth": return "0.5";
-            case "quality":
-            case "native": return "1.0";
-            default: return "0.75";
+            case "smooth": return 4;
+            case "quality": return 6;
+            case "native": return 8;
+            default: return 4;
         }
+    }
+
+    // Pixelmon usa entidades customizadas. Não reduzimos este multiplicador,
+    // pois valores como 0.5/0.75 podem fazer Pokémon desaparecerem cedo demais.
+    private String performanceEntityDistance(String profile) {
+        return "1.0";
     }
 
     private String performanceOptionValue(String key, String profile) {
@@ -2096,30 +2098,32 @@ if "private String normalizePerformanceProfile(" not in fragment:
         if ("maxFps".equals(key)) return Integer.toString(performanceFps(p));
         if ("renderDistance".equals(key)) return Integer.toString(performanceRenderDistance(p));
         if ("simulationDistance".equals(key)) return Integer.toString(performanceSimulationDistance(p));
-        if ("entityDistanceScaling".equals(key)) return performanceEntityDistance(p);
+        if ("entityDistanceScaling".equals(key)) return "1.0";
         if ("enableVsync".equals(key)) return "false";
         if ("particles".equals(key)) {
-            if ("smooth".equals(p)) return "2";
-            if ("balanced".equals(p)) return "1";
+            if ("smooth".equals(p) || "balanced".equals(p)) return "2";
+            if ("quality".equals(p)) return "1";
             return "0";
         }
         if ("mipmapLevels".equals(key)) {
-            if ("smooth".equals(p)) return "1";
-            if ("balanced".equals(p)) return "2";
-            if ("quality".equals(p)) return "3";
-            return "4";
-        }
-        if ("biomeBlendRadius".equals(key)) {
             if ("smooth".equals(p)) return "0";
             if ("balanced".equals(p)) return "1";
             if ("quality".equals(p)) return "2";
             return "3";
+        }
+        if ("biomeBlendRadius".equals(key)) {
+            if ("smooth".equals(p) || "balanced".equals(p)) return "0";
+            if ("quality".equals(p)) return "1";
+            return "2";
         }
         if ("graphicsMode".equals(key)) {
             if ("smooth".equals(p) || "balanced".equals(p)) return "0";
             return "1";
         }
         if ("entityShadows".equals(key)) {
+            return "native".equals(p) ? "true" : "false";
+        }
+        if ("ao".equals(key)) {
             return ("smooth".equals(p) || "balanced".equals(p)) ? "false" : "true";
         }
         return null;
@@ -2179,6 +2183,61 @@ if "private String normalizePerformanceProfile(" not in fragment:
         }
     }
 
+    private void disableIrisShadersForMobile() {
+        File gameDir = new File(Tools.DIR_GAME_HOME, AscensionConfig.GAME_DIR_NAME);
+        File iris = new File(new File(gameDir, "config"), "iris.properties");
+        if (!iris.isFile()) return;
+
+        File temp = new File(iris.getParentFile(), "iris.properties.ascension.tmp");
+        File backup = new File(iris.getParentFile(), "iris.properties.ascension.old");
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        boolean found = false;
+
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(iris))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().startsWith("enableShaders=")) {
+                    line = "enableShaders=false";
+                    found = true;
+                }
+                lines.add(line);
+            }
+        } catch (Exception ignored) {
+            return;
+        }
+
+        if (!found) lines.add("enableShaders=false");
+
+        try (java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(temp, false))) {
+            for (String line : lines) {
+                writer.write(line);
+                writer.newLine();
+            }
+        } catch (Exception ignored) {
+            temp.delete();
+            return;
+        }
+
+        if (backup.exists()) backup.delete();
+        if (!iris.renameTo(backup)) {
+            temp.delete();
+            return;
+        }
+
+        boolean committed = false;
+        try {
+            committed = temp.renameTo(iris);
+        } finally {
+            if (!committed) {
+                temp.delete();
+                iris.delete();
+                backup.renameTo(iris);
+            } else {
+                backup.delete();
+            }
+        }
+    }
+
     private void applyPerformanceProfile(String requestedProfile, boolean persistProfile) {
         String profile = normalizePerformanceProfile(requestedProfile);
         int resolution = performanceResolution(profile);
@@ -2189,30 +2248,22 @@ if "private String normalizePerformanceProfile(" not in fragment:
         }
 
         if (gamePrefs != null) {
+            // Só altera preferências seguras. Não força renderer, Turnip,
+            // MobileGlues, SurfaceView ou driver gráfico do aparelho.
             gamePrefs.edit()
                     .putInt("resolutionRatio", resolution)
                     .putBoolean("sustainedPerformance", true)
-                    .putBoolean("alternate_surface", true)
                     .putBoolean("force_vsync", false)
-                    .putBoolean("vsync_in_zink", false)
+                    .putBoolean("vsync_in_zink", true)
                     .putBoolean("dump_shaders", false)
-                    .putBoolean("bigCoreAffinity", false)
-                    .putBoolean("zinkPreferSystemDriver", false)
-                    .putString("mg_renderer_setting_glsl_cache_size", "256")
-                    .putString("mg_renderer_setting_multidraw", "0")
-                    .putString("mg_renderer_setting_errorSetting", "0")
-                    .putString("mg_renderer_setting_fsr", "0")
                     .commit();
         }
 
         LauncherPreferences.PREF_SCALE_FACTOR = resolution / 100f;
         LauncherPreferences.PREF_SUSTAINED_PERFORMANCE = true;
-        LauncherPreferences.PREF_USE_ALTERNATE_SURFACE = true;
         LauncherPreferences.PREF_FORCE_VSYNC = false;
-        LauncherPreferences.PREF_VSYNC_IN_ZINK = false;
+        LauncherPreferences.PREF_VSYNC_IN_ZINK = true;
         LauncherPreferences.PREF_DUMP_SHADERS = false;
-        LauncherPreferences.PREF_BIG_CORE_AFFINITY = false;
-        LauncherPreferences.PREF_ZINK_PREFER_SYSTEM_DRIVER = false;
 
         if (persistProfile && prefs != null) {
             prefs.edit()
@@ -2221,11 +2272,10 @@ if "private String normalizePerformanceProfile(" not in fragment:
                     .commit();
         }
 
+        // Shaders/Iris em NeoForge 1.21.1 podem causar corrupção visual em
+        // combinações específicas. No mobile priorizamos Pokémon visíveis e FPS.
+        disableIrisShadersForMobile();
         applyMinecraftVideoProfile(profile);
-        try {
-            LauncherPreferences.writeMGRendererSettings();
-        } catch (Throwable ignored) {
-        }
     }
 
     private void ensurePerformanceProfileV024() {
@@ -2241,13 +2291,13 @@ if "private String normalizePerformanceProfile(" not in fragment:
 
 '''
     if helper_anchor not in fragment:
-        raise SystemExit("[Ascension v0.24] ponto para helpers não encontrado")
+        raise SystemExit("[Ascension v0.25] ponto para helpers não encontrado")
     fragment = fragment.replace(helper_anchor, helpers + helper_anchor, 1)
 
 load_anchor = '        ensureAscensionPerformanceDefaults();\n        webView.loadUrl("file:///android_asset/ui/index.html");\n'
 if "ensurePerformanceProfileV024();" not in fragment:
     if load_anchor not in fragment:
-        raise SystemExit("[Ascension v0.24] ponto de inicialização não encontrado")
+        raise SystemExit("[Ascension v0.25] ponto de inicialização não encontrado")
     fragment = fragment.replace(
         load_anchor,
         '        ensureAscensionPerformanceDefaults();\n        ensurePerformanceProfileV024();\n        webView.loadUrl("file:///android_asset/ui/index.html");\n',
@@ -2258,7 +2308,7 @@ begin_anchor = '''    private void begin(boolean launchAfter) {
         String nick = prefs.getString("nick", "");
 '''
 if begin_anchor not in fragment:
-    raise SystemExit("[Ascension v0.24] begin não encontrado")
+    raise SystemExit("[Ascension v0.25] begin não encontrado")
 fragment = fragment.replace(
     begin_anchor,
     '''    private void begin(boolean launchAfter) {
@@ -2273,7 +2323,7 @@ launch_anchor = '''    private void launchGame(String versionId) {
             try {
 '''
 if launch_anchor not in fragment:
-    raise SystemExit("[Ascension v0.24] launchGame não encontrado")
+    raise SystemExit("[Ascension v0.25] launchGame não encontrado")
 fragment = fragment.replace(
     launch_anchor,
     '''    private void launchGame(String versionId) {
@@ -2285,7 +2335,7 @@ fragment = fragment.replace(
 )
 
 fragment_path.write_text(fragment, encoding="utf-8")
-print("[Ascension v0.24] perfis completos: runtime + resolução + FPS + options Minecraft + térmico OK")
+print("[Ascension v0.25] Pokemon visiveis + Iris shaders off + perfis seguros 40/50/65/100 + FPS estavel OK")
 
 
 
