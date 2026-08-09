@@ -16,11 +16,6 @@
     clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,3200);
   }
 
-  // Stable tap binding. Let WebView produce the normal click.
-  // A native Android fallback is used only if that click never arrives.
-  let clickGeneration = 0;
-  document.addEventListener('click', () => { clickGeneration++; }, true);
-
   function bindTap(el, handler){
     if(!el) return;
     el.style.touchAction = 'manipulation';
@@ -55,41 +50,67 @@
     $('#footerText').textContent=message||'Preparando...';
   }
 
-  let lastNativeTap = 0;
-  function nativeTap(cssX, cssY){
-    const now = Date.now();
-    if(now - lastNativeTap < 120) return;
-    lastNativeTap = now;
 
-    let el = document.elementFromPoint(cssX, cssY);
-    if(!el) return;
+  function switchTab(tab){
+    const btn = document.querySelector(`.rail-button[data-tab="${tab}"]`);
+    if(!btn) return;
+    $$('.rail-button').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    $$('.page').forEach(x=>x.classList.remove('active'));
+    const page = $('#page-'+tab);
+    if(page) page.classList.add('active');
+  }
 
-    const target = el.closest && el.closest('button,input,a,[data-action],[data-tab]');
+  function activateNativeElement(el){
+    if(!el) return false;
+    const target = el.closest ? el.closest('button,input,a,[data-action],[data-tab]') : el;
     if(target) el = target;
 
-    // Capture the target NOW. Do not query elementFromPoint again later,
-    // because a modal may have appeared over the same coordinates.
-    const captured = el;
-    const generationAtUp = clickGeneration;
+    if(el.tagName === 'INPUT'){
+      el.focus();
+      call('showKeyboard');
+      return true;
+    }
 
-    setTimeout(() => {
-      // Normal WebView click already arrived: do absolutely nothing.
-      if(clickGeneration !== generationAtUp) return;
-      if(!captured || !document.documentElement.contains(captured)) return;
+    const id = el.id || '';
+    if(id === 'nickChip'){ openNick(); return true; }
+    if(id === 'closeNick'){ closeNick(); return true; }
+    if(id === 'saveNick'){ saveNick(); return true; }
+    if(id === 'prepareButton'){ call('prepare'); return true; }
+    if(id === 'playButton'){
+      if(!state.nick) openNick(); else call('play');
+      return true;
+    }
+    if(id === 'repairButton'){ call('repair'); return true; }
+    if(id === 'checkServerButton'){
+      $('#serverStatus').textContent='Online';
+      toast('Servidor Ascension Pixelmon: Online','success');
+      return true;
+    }
 
-      if(captured.tagName === 'INPUT'){
-        captured.focus();
-        return;
-      }
+    if(el.dataset && el.dataset.tab){ switchTab(el.dataset.tab); return true; }
+    if(el.dataset && el.dataset.action === 'site'){ call('openWebsite'); return true; }
+    if(el.dataset && el.dataset.action === 'discord'){ call('openDiscord'); return true; }
+    return false;
+  }
 
-      if(typeof captured.click === 'function'){
-        captured.click();
-      }
-    }, 110);
+  function nativeTouch(nx, ny){
+    const x = Math.max(0, Math.min(window.innerWidth - 1, nx * window.innerWidth));
+    const y = Math.max(0, Math.min(window.innerHeight - 1, ny * window.innerHeight));
+    const el = document.elementFromPoint(x, y);
+    if(!el) return;
+    if(el.id === 'nickModal'){ closeNick(); return; }
+    activateNativeElement(el);
+  }
+
+  function nativeScroll(deltaRatio){
+    const page = document.querySelector('.page.active');
+    if(page) page.scrollTop += deltaRatio * window.innerHeight;
   }
 
   window.AscensionMobile={
-    nativeTap(cssX,cssY){ nativeTap(cssX,cssY); },
+    nativeTouch(nx,ny){ nativeTouch(nx,ny); },
+    nativeScroll(deltaRatio){ nativeScroll(deltaRatio); },
     onState(raw){ state={...state,...parse(raw)}; render(); },
     onEvent(raw){
       const e=parse(raw);

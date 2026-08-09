@@ -4,11 +4,14 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
+import android.view.inputmethod.InputMethodManager;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -97,47 +100,77 @@ public class MainMenuFragment extends Fragment {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.requestFocus(View.FOCUS_DOWN);
 
-        // Pojav has parent containers that can intercept gestures. Keep the gesture
-        // inside the launcher WebView until the finger is released.
-        final float[] ascensionDown = new float[2];
+        // v0.9: Android owns launcher touch completely.
+        // This bypasses the WebView/Pojav touch pipeline on real phones.
+        final float[] down = new float[2];
+        final float[] last = new float[2];
+        final boolean[] moved = new boolean[1];
+        final int touchSlop = ViewConfiguration.get(requireContext()).getScaledTouchSlop();
+
         webView.setOnTouchListener((v, event) -> {
             v.requestFocus();
 
-            // Disallow interception through every ancestor, not just the first parent.
             android.view.ViewParent parent = v.getParent();
-            int action = event.getActionMasked();
             while (parent != null) {
-                if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
-                    parent.requestDisallowInterceptTouchEvent(true);
-                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    parent.requestDisallowInterceptTouchEvent(false);
-                }
+                parent.requestDisallowInterceptTouchEvent(true);
                 parent = parent.getParent();
             }
 
+            int action = event.getActionMasked();
+
             if (action == MotionEvent.ACTION_DOWN) {
-                ascensionDown[0] = event.getX();
-                ascensionDown[1] = event.getY();
-            } else if (action == MotionEvent.ACTION_UP) {
-                float dx = event.getX() - ascensionDown[0];
-                float dy = event.getY() - ascensionDown[1];
-                // Only synthesize a DOM tap when it was actually a tap, not a scroll.
-                if ((dx * dx + dy * dy) < 900f) {
-                    float pageScale = webView.getScale();
-                    if (pageScale <= 0f) pageScale = 1f;
-                    float cssX = event.getX() / pageScale;
-                    float cssY = event.getY() / pageScale;
-                    final String js = "window.AscensionMobile && window.AscensionMobile.nativeTap("
-                            + cssX + "," + cssY + ")";
-                    // Ask JS to CAPTURE the current element immediately.
-                    // JS waits to see whether WebView's real click arrives before
-                    // synthesizing anything, preventing double taps/flicker.
-                    if (webView != null) webView.evaluateJavascript(js, null);
-                }
+                down[0] = last[0] = event.getX();
+                down[1] = last[1] = event.getY();
+                moved[0] = false;
+                return true;
             }
-            // Keep returning false so WebView's native scrolling, input focus and clicks
-            // continue to work; nativeTap is only a fallback.
-            return false;
+
+            if (action == MotionEvent.ACTION_MOVE) {
+                float totalDx = event.getX() - down[0];
+                float totalDy = event.getY() - down[1];
+                if (!moved[0] && (totalDx * totalDx + totalDy * totalDy) > (touchSlop * touchSlop)) {
+                    moved[0] = true;
+                }
+                if (moved[0] && webView.getHeight() > 0) {
+                    float dy = event.getY() - last[1];
+                    float ratio = -dy / (float) webView.getHeight();
+                    String js = "window.AscensionMobile && window.AscensionMobile.nativeScroll(" + ratio + ")";
+                    webView.evaluateJavascript(js, null);
+                }
+                last[0] = event.getX();
+                last[1] = event.getY();
+                return true;
+            }
+
+            if (action == MotionEvent.ACTION_UP) {
+                if (!moved[0] && webView.getWidth() > 0 && webView.getHeight() > 0) {
+                    float nx = event.getX() / (float) webView.getWidth();
+                    float ny = event.getY() / (float) webView.getHeight();
+                    nx = Math.max(0f, Math.min(1f, nx));
+                    ny = Math.max(0f, Math.min(1f, ny));
+                    String js = "window.AscensionMobile && window.AscensionMobile.nativeTouch("
+                            + nx + "," + ny + ")";
+                    webView.evaluateJavascript(js, null);
+                }
+
+                android.view.ViewParent p = v.getParent();
+                while (p != null) {
+                    p.requestDisallowInterceptTouchEvent(false);
+                    p = p.getParent();
+                }
+                return true;
+            }
+
+            if (action == MotionEvent.ACTION_CANCEL) {
+                android.view.ViewParent p = v.getParent();
+                while (p != null) {
+                    p.requestDisallowInterceptTouchEvent(false);
+                    p = p.getParent();
+                }
+                return true;
+            }
+
+            return true;
         });
 
         webView.setWebChromeClient(new WebChromeClient());
@@ -223,6 +256,17 @@ public class MainMenuFragment extends Fragment {
         @JavascriptInterface public void openWebsite() { openUrl(AscensionConfig.WEBSITE); }
         @JavascriptInterface public void openDiscord() { openUrl(AscensionConfig.DISCORD); }
         @JavascriptInterface public void checkServer() { checkServerAsync(); }
+
+        @JavascriptInterface
+        public void showKeyboard() {
+            main.postDelayed(() -> {
+                if (webView == null) return;
+                webView.requestFocus(View.FOCUS_DOWN);
+                InputMethodManager imm = (InputMethodManager) requireContext()
+                        .getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+            }, 80);
+        }
     }
 
     private void begin(boolean launchAfter) {
