@@ -15,7 +15,7 @@ bootstrap_path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/asc
 downloader_path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/tasks/MinecraftDownloader.java"
 
 if not index_path.is_file() or not styles_path.is_file():
-    raise SystemExit("[Ascension v0.18] UI não encontrada")
+    raise SystemExit("[Ascension v0.19] UI não encontrada")
 
 # 1) Mantém a tela lógica aprovada na v0.17.
 index = index_path.read_text(encoding="utf-8")
@@ -48,14 +48,14 @@ index_path.write_text(index, encoding="utf-8")
 styles = styles_path.read_text(encoding="utf-8")
 for marker in (
     "/* v0.16 - SYNCHRONIZED PHONE CANVAS */",
-    "/* v0.18 - ASCENSION FINAL PHONE LAYOUT */",
+    "/* v0.19 - ASCENSION FINAL PHONE LAYOUT */",
 ):
     pos = styles.find(marker)
     if pos >= 0:
         styles = styles[:pos].rstrip() + "\n"
 
 fit_css = r'''
-/* v0.18 - ASCENSION FINAL PHONE LAYOUT */
+/* v0.19 - ASCENSION FINAL PHONE LAYOUT */
 *{
   box-sizing:border-box!important;
   -webkit-text-size-adjust:100%!important;
@@ -405,6 +405,168 @@ if fragment_path.is_file():
     replacement = "        settings.setLoadWithOverviewMode(true);\n        settings.setTextZoom(100);\n"
     if "settings.setTextZoom(100);" not in fragment and anchor in fragment:
         fragment = fragment.replace(anchor, replacement, 1)
+
+    # v0.19: NeoForge installer handoff must survive Fragment detach/recreation.
+    # The old callback used requireContext() inside a posted Runnable and crashed
+    # if Android detached MainMenuFragment before the Runnable executed.
+    if "PREF_PENDING_NEOFORGE_INSTALLER" not in fragment:
+        fields_old = """    private AscensionBootstrap bootstrap;
+
+    private final ActivityResultLauncher<Intent> neoForgeInstallerLauncher ="""
+        fields_new = """    private AscensionBootstrap bootstrap;
+    private static final String PREF_PENDING_NEOFORGE_INSTALLER = "pending_neoforge_installer";
+    private static final String PREF_PENDING_NEOFORGE_LAUNCH_AFTER = "pending_neoforge_launch_after";
+    private boolean neoForgeInstallerLaunchInFlight;
+
+    private final ActivityResultLauncher<Intent> neoForgeInstallerLauncher ="""
+        if fields_old not in fragment:
+            raise SystemExit("[Ascension v0.19] campos do MainMenuFragment não encontrados")
+        fragment = fragment.replace(fields_old, fields_new, 1)
+
+        callback_old = """            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                busy = false;
+                if (bootstrap == null) bootstrap = createBootstrap();
+                if (result.getResultCode() != Activity.RESULT_OK) {
+                    sendEvent("error", "A instalação do NeoForge não foi concluída.", -1);
+                    sendState();
+                    return;
+                }
+                busy = true;
+                sendEvent("progress", "Finalizando instalação do NeoForge...", 52);
+                bootstrap.resumeAfterNeoForgeInstaller(pendingNick, pendingLaunchAfterInstaller);
+            });"""
+        callback_new = """            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                neoForgeInstallerLaunchInFlight = false;
+                busy = false;
+
+                if (prefs != null) {
+                    if (pendingNick == null || !pendingNick.matches("^[A-Za-z0-9_]{3,16}$")) {
+                        pendingNick = prefs.getString("nick", "");
+                    }
+                    pendingLaunchAfterInstaller = prefs.getBoolean(
+                            PREF_PENDING_NEOFORGE_LAUNCH_AFTER,
+                            pendingLaunchAfterInstaller
+                    );
+                    prefs.edit()
+                            .remove(PREF_PENDING_NEOFORGE_INSTALLER)
+                            .remove(PREF_PENDING_NEOFORGE_LAUNCH_AFTER)
+                            .commit();
+                }
+
+                if (bootstrap == null) bootstrap = createBootstrap();
+
+                if (result.getResultCode() != Activity.RESULT_OK) {
+                    sendEvent("error", "A instalação do NeoForge não foi concluída.", -1);
+                    sendState();
+                    return;
+                }
+
+                busy = true;
+                sendEvent("progress", "Finalizando instalação do NeoForge...", 52);
+                bootstrap.resumeAfterNeoForgeInstaller(pendingNick, pendingLaunchAfterInstaller);
+            });"""
+        if callback_old not in fragment:
+            raise SystemExit("[Ascension v0.19] callback ActivityResult do NeoForge não encontrado")
+        fragment = fragment.replace(callback_old, callback_new, 1)
+
+        resume_old = """        sendState();
+    }
+
+    @Override
+    public void onDestroyView() {"""
+        resume_new = """        sendState();
+        launchPendingNeoForgeInstallerIfPossible();
+    }
+
+    @Override
+    public void onDestroyView() {"""
+        if resume_old not in fragment:
+            raise SystemExit("[Ascension v0.19] onResume do MainMenuFragment não encontrado")
+        fragment = fragment.replace(resume_old, resume_new, 1)
+
+        installer_old = """            @Override
+            public void onNeoForgeInstallerReady(File installer) {
+                main.post(() -> {
+                    Intent intent = new Intent(requireContext(), JavaGUILauncherActivity.class);
+                    intent.putExtra("javaArgs", "-jar " + installer.getAbsolutePath() + " --install-client");
+                    intent.putExtra("openLogOutput", false);
+                    intent.putExtra("ascension_return_after_vm", true);
+                    neoForgeInstallerLauncher.launch(intent);
+                });
+            }"""
+        installer_new = """            @Override
+            public void onNeoForgeInstallerReady(File installer) {
+                if (installer == null || !installer.isFile()) {
+                    busy = false;
+                    sendEvent("error", "O instalador do NeoForge não foi encontrado.", -1);
+                    sendState();
+                    return;
+                }
+
+                if (prefs != null) {
+                    prefs.edit()
+                            .putString(PREF_PENDING_NEOFORGE_INSTALLER, installer.getAbsolutePath())
+                            .putBoolean(PREF_PENDING_NEOFORGE_LAUNCH_AFTER, pendingLaunchAfterInstaller)
+                            .commit();
+                }
+
+                main.post(MainMenuFragment.this::launchPendingNeoForgeInstallerIfPossible);
+            }"""
+        if installer_old not in fragment:
+            raise SystemExit("[Ascension v0.19] onNeoForgeInstallerReady antigo não encontrado")
+        fragment = fragment.replace(installer_old, installer_new, 1)
+
+        method_anchor = """    private void launchGame(String versionId) {
+"""
+        lifecycle_method = """    private void launchPendingNeoForgeInstallerIfPossible() {
+        if (neoForgeInstallerLaunchInFlight || prefs == null) return;
+        if (!isAdded() || !isResumed()) return;
+
+        Activity host = getActivity();
+        if (host == null || host.isFinishing() || host.isDestroyed()) return;
+
+        String installerPath = prefs.getString(PREF_PENDING_NEOFORGE_INSTALLER, "");
+        if (installerPath == null || installerPath.trim().isEmpty()) return;
+
+        File installer = new File(installerPath);
+        if (!installer.isFile() || installer.length() <= 0) {
+            prefs.edit()
+                    .remove(PREF_PENDING_NEOFORGE_INSTALLER)
+                    .remove(PREF_PENDING_NEOFORGE_LAUNCH_AFTER)
+                    .commit();
+            busy = false;
+            sendEvent("error", "O instalador do NeoForge desapareceu. Toque em PREPARAR para tentar novamente.", -1);
+            sendState();
+            return;
+        }
+
+        pendingNick = prefs.getString("nick", "");
+        pendingLaunchAfterInstaller = prefs.getBoolean(
+                PREF_PENDING_NEOFORGE_LAUNCH_AFTER,
+                pendingLaunchAfterInstaller
+        );
+
+        Intent intent = new Intent(host, JavaGUILauncherActivity.class);
+        intent.putExtra("javaArgs", "-jar " + installer.getAbsolutePath() + " --install-client");
+        intent.putExtra("openLogOutput", false);
+        intent.putExtra("ascension_return_after_vm", true);
+
+        try {
+            neoForgeInstallerLaunchInFlight = true;
+            neoForgeInstallerLauncher.launch(intent);
+        } catch (Throwable t) {
+            neoForgeInstallerLaunchInFlight = false;
+            busy = false;
+            sendEvent("error", "Falha ao abrir o instalador do NeoForge: " + cleanMessage(t), -1);
+            sendState();
+        }
+    }
+
+"""
+        if method_anchor not in fragment:
+            raise SystemExit("[Ascension v0.19] ponto para método de retomada não encontrado")
+        fragment = fragment.replace(method_anchor, lifecycle_method + method_anchor, 1)
+
     fragment_path.write_text(fragment, encoding="utf-8")
 
 # 5) Progresso real do downloader Minecraft -> UI Ascension.
@@ -493,7 +655,7 @@ if downloader_path.is_file():
 '''
         downloader, count = pattern.subn(replacement, downloader, count=1)
         if count != 1:
-            raise SystemExit("[Ascension v0.18] não consegui atualizar startForcedDownload")
+            raise SystemExit("[Ascension v0.19] não consegui atualizar startForcedDownload")
 
     file_counter_line = "        int progress = (int)((dlFileCounter * 100L) / mTotalFileCount);\n"
     if file_counter_line in downloader:
@@ -563,7 +725,7 @@ if bootstrap_path.is_file():
                         }
                 );'''
         if old not in bootstrap:
-            raise SystemExit("[Ascension v0.18] ponto do progresso Minecraft não encontrado em AscensionBootstrap")
+            raise SystemExit("[Ascension v0.19] ponto do progresso Minecraft não encontrado em AscensionBootstrap")
         bootstrap = bootstrap.replace(old, new, 1)
 
     bootstrap = bootstrap.replace(
@@ -574,4 +736,4 @@ if bootstrap_path.is_file():
 
     bootstrap_path.write_text(bootstrap, encoding="utf-8")
 
-print("[Ascension v0.18] Site + Discord + banner claro + progresso real OK")
+print("[Ascension v0.19] interface preservada + NeoForge lifecycle-safe + progresso real OK")
