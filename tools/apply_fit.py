@@ -1318,4 +1318,559 @@ if "nativePointerDown(" not in fragment:
 
 fragment_path.write_text(fragment, encoding="utf-8")
 
-print("[Ascension v0.20] RAM configurável + ícone novo + NeoForge lifecycle-safe OK")
+# ---------------------------------------------------------------------
+# 9) v0.21 - Performance mobile + nome final do aplicativo.
+# ---------------------------------------------------------------------
+
+# Nome visível do APK: remove "(Debug)" sem alterar package/applicationId.
+build_gradle_path = root / "app_pojavlauncher/build.gradle"
+if build_gradle_path.is_file():
+    gradle_text = build_gradle_path.read_text(encoding="utf-8")
+    gradle_text = gradle_text.replace(
+        'resValue "string", "app_name", "Ascension Pixelmon (Debug)"',
+        'resValue "string", "app_name", "Ascension Pixelmon"'
+    )
+    gradle_text = gradle_text.replace(
+        'resValue "string", "app_short_name", "Ascension Pixelmon (Debug)"',
+        'resValue "string", "app_short_name", "Ascension Pixelmon"'
+    )
+    build_gradle_path.write_text(gradle_text, encoding="utf-8")
+
+# ---------------------------------------------------------------------
+# 9.1) Launcher mais leve: mantém o visual, mas remove efeitos caros.
+# ---------------------------------------------------------------------
+styles = styles_path.read_text(encoding="utf-8")
+perf_marker = "/* v0.21 - MOBILE PERFORMANCE */"
+if perf_marker not in styles:
+    perf_css = r"""
+
+/* v0.21 - MOBILE PERFORMANCE */
+html,body,.shell{
+  overscroll-behavior:none!important;
+}
+
+.modal{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  background:rgba(0,0,0,.82)!important;
+}
+
+.modal-card{
+  box-shadow:0 12px 34px rgba(0,0,0,.48)!important;
+}
+
+.brand{
+  box-shadow:0 5px 15px rgba(54,203,114,.10)!important;
+}
+
+.server-orb i{
+  box-shadow:
+    0 0 0 6px rgba(109,232,155,.05),
+    0 0 14px rgba(54,203,114,.24)!important;
+}
+
+.play{
+  box-shadow:0 6px 16px rgba(54,203,114,.13)!important;
+}
+
+.toast{
+  box-shadow:0 5px 18px rgba(0,0,0,.42)!important;
+}
+
+.bar i{
+  transition:width .08s linear!important;
+}
+
+#memorySlider::-webkit-slider-thumb{
+  box-shadow:0 0 0 2px rgba(109,232,155,.08)!important;
+}
+
+.hero-img,
+.shade,
+.hero-copy{
+  will-change:auto!important;
+}
+
+#page-settings .performance-card{
+  grid-column:1/-1!important;
+  min-height:86px!important;
+  padding:10px 12px!important;
+  border-color:rgba(135,148,255,.12)!important;
+}
+
+.performance-head{
+  display:flex!important;
+  justify-content:space-between!important;
+  align-items:flex-start!important;
+  gap:10px!important;
+}
+
+.performance-head h3{
+  margin:3px 0 2px!important;
+  font-size:11px!important;
+}
+
+.performance-head p{
+  margin:0!important;
+  color:var(--muted)!important;
+  font-size:6.2px!important;
+  line-height:1.3!important;
+}
+
+.performance-value{
+  flex:0 0 auto!important;
+  color:var(--green)!important;
+  font-size:13px!important;
+  font-weight:900!important;
+  white-space:nowrap!important;
+}
+
+.performance-presets{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:5px!important;
+  margin-top:9px!important;
+}
+
+.performance-preset{
+  min-width:0!important;
+  height:28px!important;
+  padding:0 4px!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:8px!important;
+  background:#191c23!important;
+  color:#8f96a1!important;
+  font-size:5.7px!important;
+  font-weight:900!important;
+  white-space:nowrap!important;
+}
+
+.performance-preset.active{
+  border-color:rgba(109,232,155,.30)!important;
+  background:rgba(109,232,155,.10)!important;
+  color:var(--green)!important;
+}
+"""
+    styles_path.write_text(styles.rstrip() + perf_css, encoding="utf-8")
+
+# ---------------------------------------------------------------------
+# 9.2) Presets de resolução interna para Pixelmon.
+# ---------------------------------------------------------------------
+index = index_path.read_text(encoding="utf-8")
+if 'id="resolutionValue"' not in index:
+    insert_after = '''            <p class="memory-note" id="memoryNote">O limite máximo é calculado pelo launcher para não usar toda a RAM do Android.</p>
+          </article>
+
+'''
+    performance_card = '''            <p class="memory-note" id="memoryNote">O limite máximo é calculado pelo launcher para não usar toda a RAM do Android.</p>
+          </article>
+
+          <article class="setup-card performance-card">
+            <div class="performance-head">
+              <div>
+                <small>OTIMIZAÇÃO MOBILE</small>
+                <h3>Resolução interna do jogo</h3>
+                <p>Reduz a carga da GPU sem mudar o tamanho da interface. Menor resolução costuma dar mais FPS e menos aquecimento.</p>
+              </div>
+              <strong class="performance-value" id="resolutionValue">--%</strong>
+            </div>
+            <div class="performance-presets">
+              <button class="performance-preset" id="perfSmooth">LISO · 65%</button>
+              <button class="performance-preset" id="perfBalanced">EQUILIBRADO · 75%</button>
+              <button class="performance-preset" id="perfQuality">QUALIDADE · 90%</button>
+              <button class="performance-preset" id="perfNative">NATIVO · 100%</button>
+            </div>
+          </article>
+
+'''
+    if insert_after not in index:
+        raise SystemExit("[Ascension v0.21] ponto da memória para inserir desempenho não encontrado")
+    index = index.replace(insert_after, performance_card, 1)
+    index_path.write_text(index, encoding="utf-8")
+
+# JavaScript dos presets.
+appjs = app_js_path.read_text(encoding="utf-8")
+if "function renderPerformance()" not in appjs:
+    appjs = appjs.replace(
+        "memoryMaxMb:6144};",
+        "memoryMaxMb:6144,resolutionPercent:75};",
+        1
+    )
+
+    if "    renderMemory();\n  }" not in appjs:
+        raise SystemExit("[Ascension v0.21] renderMemory no render() não encontrado")
+    appjs = appjs.replace(
+        "    renderMemory();\n  }",
+        "    renderMemory();\n    renderPerformance();\n  }",
+        1
+    )
+
+    perf_funcs = r"""  function renderPerformance(){
+    const value=Math.max(25,Math.min(100,Number(state.resolutionPercent)||75));
+    const label=$('#resolutionValue');
+    if(label) label.textContent=value+'%';
+
+    const presets=[
+      ['#perfSmooth',65],
+      ['#perfBalanced',75],
+      ['#perfQuality',90],
+      ['#perfNative',100]
+    ];
+    presets.forEach(([selector,preset])=>{
+      const el=$(selector);
+      if(!el) return;
+      el.classList.toggle('active',Math.abs(value-preset)<3);
+    });
+  }
+
+  function saveResolution(percent){
+    let value=Math.max(25,Math.min(100,Math.round((Number(percent)||75)/5)*5));
+    const saved=call('setResolutionPercent',value);
+    if(typeof saved==='number' && saved>=25) value=saved;
+    state.resolutionPercent=value;
+    renderPerformance();
+    toast(`Resolução interna: ${value}%`,'success');
+  }
+
+"""
+    anchor = "  function switchTab(tab){\n"
+    if anchor not in appjs:
+        raise SystemExit("[Ascension v0.21] switchTab não encontrado")
+    appjs = appjs.replace(anchor, perf_funcs + anchor, 1)
+
+    input_anchor = "    if(el.id === 'memoryMinus'){ stepMemory(-1); return true; }\n"
+    perf_activation = """    if(el.id === 'perfSmooth'){ saveResolution(65); return true; }
+    if(el.id === 'perfBalanced'){ saveResolution(75); return true; }
+    if(el.id === 'perfQuality'){ saveResolution(90); return true; }
+    if(el.id === 'perfNative'){ saveResolution(100); return true; }
+"""
+    if input_anchor not in appjs:
+        raise SystemExit("[Ascension v0.21] ativação dos controles de memória não encontrada")
+    appjs = appjs.replace(input_anchor, perf_activation + input_anchor, 1)
+
+    bind_anchor = "  bindTap($('#memoryMinus'),()=>stepMemory(-1));\n"
+    perf_bindings = """  bindTap($('#perfSmooth'),()=>saveResolution(65));
+  bindTap($('#perfBalanced'),()=>saveResolution(75));
+  bindTap($('#perfQuality'),()=>saveResolution(90));
+  bindTap($('#perfNative'),()=>saveResolution(100));
+"""
+    if bind_anchor not in appjs:
+        raise SystemExit("[Ascension v0.21] bindings de memória não encontrados")
+    appjs = appjs.replace(bind_anchor, perf_bindings + bind_anchor, 1)
+
+    app_js_path.write_text(appjs, encoding="utf-8")
+
+# ---------------------------------------------------------------------
+# 9.3) Ponte Android: resolução real do Pojav + padrão otimizado uma vez.
+# ---------------------------------------------------------------------
+fragment = fragment_path.read_text(encoding="utf-8")
+
+if 'o.put("resolutionPercent"' not in fragment:
+    state_anchor = '                o.put("memoryMaxMb", memoryMaxMb());\n'
+    if state_anchor not in fragment:
+        raise SystemExit("[Ascension v0.21] estado de RAM não encontrado")
+    fragment = fragment.replace(
+        state_anchor,
+        state_anchor + '                o.put("resolutionPercent", currentResolutionPercent());\n',
+        1
+    )
+
+if "public int setResolutionPercent(" not in fragment:
+    bridge_anchor = "        @JavascriptInterface public void prepare() { begin(false); }\n"
+    bridge_method = """        @JavascriptInterface
+        public int setResolutionPercent(int requestedPercent) {
+            int value = sanitizeResolutionPercent(requestedPercent);
+            Context context = getContext();
+            SharedPreferences gamePrefs = LauncherPreferences.DEFAULT_PREF;
+            if (gamePrefs == null && context != null) {
+                gamePrefs = PreferenceManager.getDefaultSharedPreferences(context);
+            }
+            if (gamePrefs != null) {
+                gamePrefs.edit().putInt("resolutionRatio", value).commit();
+            }
+            LauncherPreferences.PREF_SCALE_FACTOR = value / 100f;
+            if (prefs != null) {
+                prefs.edit().putBoolean("performance_v021_initialized", true).commit();
+            }
+            sendState();
+            return value;
+        }
+
+"""
+    if bridge_anchor not in fragment:
+        raise SystemExit("[Ascension v0.21] ponto da ponte de resolução não encontrado")
+    fragment = fragment.replace(bridge_anchor, bridge_method + bridge_anchor, 1)
+
+if "private int recommendedResolutionPercent()" not in fragment:
+    helper_anchor = "    private void begin(boolean launchAfter) {\n"
+    helpers = """    private int sanitizeResolutionPercent(int requestedPercent) {
+        int rounded = Math.round(requestedPercent / 5f) * 5;
+        return Math.max(25, Math.min(100, rounded));
+    }
+
+    private int recommendedResolutionPercent() {
+        Context context = getContext();
+        if (context == null) return 75;
+
+        android.util.DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        int minSide = Math.min(metrics.widthPixels, metrics.heightPixels);
+        int recommended;
+
+        if (minSide <= 720) recommended = 100;
+        else if (minSide <= 900) recommended = 90;
+        else if (minSide <= 1080) recommended = 75;
+        else if (minSide <= 1440) recommended = 65;
+        else recommended = 55;
+
+        int totalRam = Tools.getTotalDeviceMemory(context);
+        if (totalRam > 0 && totalRam < 4096) recommended -= 10;
+        else if (totalRam > 0 && totalRam < 6144) recommended -= 5;
+
+        return sanitizeResolutionPercent(Math.max(50, recommended));
+    }
+
+    private int currentResolutionPercent() {
+        Context context = getContext();
+        SharedPreferences gamePrefs = LauncherPreferences.DEFAULT_PREF;
+        if (gamePrefs == null && context != null) {
+            gamePrefs = PreferenceManager.getDefaultSharedPreferences(context);
+        }
+        int fallback = LauncherPreferences.PREF_SCALE_FACTOR > 0f
+                ? Math.round(LauncherPreferences.PREF_SCALE_FACTOR * 100f)
+                : 100;
+        int stored = gamePrefs == null ? fallback : gamePrefs.getInt("resolutionRatio", fallback);
+        int safe = sanitizeResolutionPercent(stored);
+        LauncherPreferences.PREF_SCALE_FACTOR = safe / 100f;
+        return safe;
+    }
+
+    private void ensureAscensionPerformanceDefaults() {
+        if (prefs == null || prefs.getBoolean("performance_v021_initialized", false)) return;
+
+        Context context = getContext();
+        SharedPreferences gamePrefs = LauncherPreferences.DEFAULT_PREF;
+        if (gamePrefs == null && context != null) {
+            gamePrefs = PreferenceManager.getDefaultSharedPreferences(context);
+        }
+
+        int current = currentResolutionPercent();
+        int recommended = recommendedResolutionPercent();
+        int selected = Math.min(current, recommended);
+
+        if (gamePrefs != null) {
+            gamePrefs.edit().putInt("resolutionRatio", selected).commit();
+        }
+        LauncherPreferences.PREF_SCALE_FACTOR = selected / 100f;
+        prefs.edit().putBoolean("performance_v021_initialized", true).commit();
+    }
+
+"""
+    if helper_anchor not in fragment:
+        raise SystemExit("[Ascension v0.21] ponto para helpers de desempenho não encontrado")
+    fragment = fragment.replace(helper_anchor, helpers + helper_anchor, 1)
+
+if "ASCENSION_V021_WEBVIEW_PERFORMANCE" not in fragment:
+    web_anchor = "        settings.setTextZoom(100);\n"
+    web_perf = """        settings.setTextZoom(100);
+        // ASCENSION_V021_WEBVIEW_PERFORMANCE
+        webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setScrollbarFadingEnabled(true);
+        webView.setOverScrollMode(android.view.View.OVER_SCROLL_NEVER);
+"""
+    if web_anchor not in fragment:
+        raise SystemExit("[Ascension v0.21] setTextZoom não encontrado")
+    fragment = fragment.replace(web_anchor, web_perf, 1)
+
+if "ensureAscensionPerformanceDefaults();\n        webView.loadUrl" not in fragment:
+    load_anchor = '        webView.loadUrl("file:///android_asset/ui/index.html");\n'
+    if load_anchor not in fragment:
+        raise SystemExit("[Ascension v0.21] loadUrl não encontrado")
+    fragment = fragment.replace(
+        load_anchor,
+        '        ensureAscensionPerformanceDefaults();\n' + load_anchor,
+        1
+    )
+
+fragment_path.write_text(fragment, encoding="utf-8")
+
+print("[Ascension v0.21] app Ascension Pixelmon + launcher leve + resolução Pixelmon otimizada OK")
+
+# ---------------------------------------------------------------------
+# 10) v0.22 - Novo release Mobile + atualização segura igual ao PC.
+# ---------------------------------------------------------------------
+asc_config_path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/ascension/AscensionConfig.java"
+updater_path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/ascension/AscensionUpdater.java"
+
+if not asc_config_path.is_file():
+    raise SystemExit("[Ascension v0.22] AscensionConfig.java não encontrado")
+
+asc_config = asc_config_path.read_text(encoding="utf-8")
+
+url_replacements = {
+    "https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/mods.zip":
+        "https://github.com/uwillzard/ascension-modpack-mobile/releases/download/Mobile/mods.zip",
+    "https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/config.zip":
+        "https://github.com/uwillzard/ascension-modpack-mobile/releases/download/Mobile/config.zip",
+    "https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/options.txt":
+        "https://github.com/uwillzard/ascension-modpack-mobile/releases/download/Mobile/options.txt",
+    "https://api.github.com/repos/uwillzard/ascension-pixelmon-modpack/releases/tags/v1.0.0":
+        "https://api.github.com/repos/uwillzard/ascension-modpack-mobile/releases/tags/Mobile",
+}
+
+for old, new in url_replacements.items():
+    asc_config = asc_config.replace(old, new)
+
+if 'public static final String RELEASE_PAGE' not in asc_config:
+    api_line = '    public static final String RELEASE_API = "https://api.github.com/repos/uwillzard/ascension-modpack-mobile/releases/tags/Mobile";\n'
+    page_line = '    public static final String RELEASE_PAGE = "https://github.com/uwillzard/ascension-modpack-mobile/releases/tag/Mobile";\n'
+    if api_line not in asc_config:
+        raise SystemExit("[Ascension v0.22] RELEASE_API novo não encontrado")
+    asc_config = asc_config.replace(api_line, page_line + api_line, 1)
+
+asc_config_path.write_text(asc_config, encoding="utf-8")
+
+if not updater_path.is_file():
+    raise SystemExit("[Ascension v0.22] AscensionUpdater.java não encontrado")
+
+updater = updater_path.read_text(encoding="utf-8")
+
+old_method_start = '    private void installClientFilesFirstTime(File root) throws Exception {\n'
+old_method_end = '    private void ensureBundledCleanMenu(File root) throws IOException {\n'
+start = updater.find(old_method_start)
+end = updater.find(old_method_end)
+
+if start < 0 or end < 0 or end <= start:
+    raise SystemExit("[Ascension v0.22] installClientFilesFirstTime não encontrado")
+
+new_method = '''    private void installClientFilesFirstTime(File root) throws Exception {
+        File config = new File(root, "config");
+        File options = new File(root, "options.txt");
+
+        boolean configInstalled = prefs.getBoolean("config_installed_once", false);
+        boolean optionsInstalled = prefs.getBoolean("options_installed_once", false);
+
+        if (config.isDirectory()) {
+            configInstalled = true;
+            prefs.edit().putBoolean("config_installed_once", true).apply();
+        }
+        if (options.isFile() && options.length() > 0) {
+            optionsInstalled = true;
+            prefs.edit().putBoolean("options_installed_once", true).apply();
+        }
+
+        if (configInstalled && optionsInstalled) {
+            prefs.edit().putBoolean("client_files_installed", true).apply();
+            progress("Config e options preservados.", 91);
+            return;
+        }
+
+        if (!configInstalled) {
+            File cfgZip = new File(root, "config.download.tmp");
+            File cfgStage = new File(root, "config.stage");
+            File cfgNormalized = new File(root, "config.normalized");
+
+            deleteRecursively(cfgStage);
+            deleteRecursively(cfgNormalized);
+            if (cfgZip.exists()) cfgZip.delete();
+
+            try {
+                downloadFile(AscensionConfig.CONFIG_URL, cfgZip,
+                        "Baixando configuração inicial", 83, 87);
+                unzipSafely(cfgZip, cfgStage);
+
+                File extracted = normalizeExtractedFolder(cfgStage, "config");
+                File incoming = extracted;
+
+                if (!incoming.equals(cfgStage)) {
+                    if (!incoming.renameTo(cfgNormalized)) {
+                        copyDirectory(incoming, cfgNormalized);
+                    }
+                    deleteRecursively(cfgStage);
+                    incoming = cfgNormalized;
+                }
+
+                if (!config.exists()) {
+                    if (!incoming.renameTo(config)) {
+                        copyDirectory(incoming, config);
+                    }
+                }
+
+                prefs.edit().putBoolean("config_installed_once", true).apply();
+            } finally {
+                deleteRecursively(cfgStage);
+                deleteRecursively(cfgNormalized);
+                if (cfgZip.exists()) cfgZip.delete();
+            }
+        }
+
+        if (!optionsInstalled) {
+            File optTmp = new File(root, "options.download.tmp");
+            if (optTmp.exists()) optTmp.delete();
+
+            try {
+                downloadFile(AscensionConfig.OPTIONS_URL, optTmp,
+                        "Baixando options.txt inicial", 88, 91);
+
+                if (!options.exists()) {
+                    replaceFile(optTmp, options);
+                }
+
+                prefs.edit().putBoolean("options_installed_once", true).apply();
+            } finally {
+                if (optTmp.exists()) optTmp.delete();
+            }
+        }
+
+        prefs.edit()
+                .putBoolean("client_files_installed", true)
+                .putBoolean("config_installed_once", true)
+                .putBoolean("options_installed_once", true)
+                .apply();
+
+        progress("Config e options instalados uma única vez.", 91);
+    }
+
+'''
+
+updater = updater[:start] + new_method + updater[end:]
+
+sync_anchor = '''        if (!gameDir.exists() && !gameDir.mkdirs()) {
+            throw new IOException("Não foi possível criar a pasta do Ascension.");
+        }
+
+        progress("Verificando mods do Ascension...", 66);
+'''
+sync_replacement = '''        if (!gameDir.exists() && !gameDir.mkdirs()) {
+            throw new IOException("Não foi possível criar a pasta do Ascension.");
+        }
+
+        deleteRecursively(new File(gameDir, "mods.stage"));
+        deleteRecursively(new File(gameDir, "mods.normalized"));
+        File staleModsTmp = new File(gameDir, "mods.download.tmp");
+        if (staleModsTmp.exists()) staleModsTmp.delete();
+
+        progress("Verificando atualização dos mods...", 66);
+'''
+if sync_anchor in updater and "Verificando atualização dos mods..." not in updater:
+    updater = updater.replace(sync_anchor, sync_replacement, 1)
+
+updater_path.write_text(updater, encoding="utf-8")
+
+build_gradle_path = root / "app_pojavlauncher/build.gradle"
+if build_gradle_path.is_file():
+    gradle_text = build_gradle_path.read_text(encoding="utf-8")
+    gradle_text = gradle_text.replace(
+        'resValue "string", "app_name", "Ascension Pixelmon (Debug)"',
+        'resValue "string", "app_name", "Ascension Pixelmon"'
+    )
+    gradle_text = gradle_text.replace(
+        'resValue "string", "app_short_name", "Ascension Pixelmon (Debug)"',
+        'resValue "string", "app_short_name", "Ascension Pixelmon"'
+    )
+    build_gradle_path.write_text(gradle_text, encoding="utf-8")
+
+print("[Ascension v0.23] release uwillzard mobile + config/options uma vez + mods por SHA-256 + nome final OK")
+
+
