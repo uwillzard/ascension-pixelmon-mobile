@@ -129,9 +129,10 @@ public class MainMenuFragment extends Fragment {
                     float cssY = event.getY() / pageScale;
                     final String js = "window.AscensionMobile && window.AscensionMobile.nativeTap("
                             + cssX + "," + cssY + ")";
-                    webView.postDelayed(() -> {
-                        if (webView != null) webView.evaluateJavascript(js, null);
-                    }, 40);
+                    // Ask JS to CAPTURE the current element immediately.
+                    // JS waits to see whether WebView's real click arrives before
+                    // synthesizing anything, preventing double taps/flicker.
+                    if (webView != null) webView.evaluateJavascript(js, null);
                 }
             }
             // Keep returning false so WebView's native scrolling, input focus and clicks

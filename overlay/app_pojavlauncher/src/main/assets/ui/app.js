@@ -16,21 +16,15 @@
     clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,3200);
   }
 
-  // WebView/Pojav-safe tap binding: touch is handled directly, with click as fallback.
+  // Stable tap binding. Let WebView produce the normal click.
+  // A native Android fallback is used only if that click never arrives.
+  let clickGeneration = 0;
+  document.addEventListener('click', () => { clickGeneration++; }, true);
+
   function bindTap(el, handler){
     if(!el) return;
-    let lastTouch = 0;
     el.style.touchAction = 'manipulation';
-    el.addEventListener('touchend', e => {
-      lastTouch = Date.now();
-      e.preventDefault();
-      e.stopPropagation();
-      handler(e);
-    }, {passive:false});
-    el.addEventListener('click', e => {
-      if(Date.now() - lastTouch < 700) return;
-      handler(e);
-    });
+    el.addEventListener('click', handler);
   }
 
   function render(){
@@ -64,25 +58,34 @@
   let lastNativeTap = 0;
   function nativeTap(cssX, cssY){
     const now = Date.now();
-    if(now - lastNativeTap < 180) return;
+    if(now - lastNativeTap < 120) return;
     lastNativeTap = now;
 
     let el = document.elementFromPoint(cssX, cssY);
     if(!el) return;
 
-    // Walk up to a real interactive target.
     const target = el.closest && el.closest('button,input,a,[data-action],[data-tab]');
     if(target) el = target;
 
-    if(el.tagName === 'INPUT'){
-      el.focus();
-      try { el.click(); } catch(e) {}
-      return;
-    }
+    // Capture the target NOW. Do not query elementFromPoint again later,
+    // because a modal may have appeared over the same coordinates.
+    const captured = el;
+    const generationAtUp = clickGeneration;
 
-    if(typeof el.click === 'function'){
-      try { el.click(); } catch(e) {}
-    }
+    setTimeout(() => {
+      // Normal WebView click already arrived: do absolutely nothing.
+      if(clickGeneration !== generationAtUp) return;
+      if(!captured || !document.documentElement.contains(captured)) return;
+
+      if(captured.tagName === 'INPUT'){
+        captured.focus();
+        return;
+      }
+
+      if(typeof captured.click === 'function'){
+        captured.click();
+      }
+    }, 110);
   }
 
   window.AscensionMobile={
@@ -112,7 +115,6 @@
   bindTap($('#closeNick'),closeNick);
   bindTap($('#saveNick'),saveNick);
   $('#nickInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveNick()});
-  $('#nickModal').addEventListener('touchend',e=>{ if(e.target===$('#nickModal')){e.preventDefault(); closeNick();} },{passive:false});
   $('#nickModal').addEventListener('click',e=>{if(e.target===$('#nickModal'))closeNick()});
   bindTap($('#prepareButton'),()=>call('prepare'));
   bindTap($('#playButton'),()=>{ if(!state.nick) openNick(); else call('play'); });
