@@ -61,7 +61,32 @@
     $('#footerText').textContent=message||'Preparando...';
   }
 
+  let lastNativeTap = 0;
+  function nativeTap(cssX, cssY){
+    const now = Date.now();
+    if(now - lastNativeTap < 180) return;
+    lastNativeTap = now;
+
+    let el = document.elementFromPoint(cssX, cssY);
+    if(!el) return;
+
+    // Walk up to a real interactive target.
+    const target = el.closest && el.closest('button,input,a,[data-action],[data-tab]');
+    if(target) el = target;
+
+    if(el.tagName === 'INPUT'){
+      el.focus();
+      try { el.click(); } catch(e) {}
+      return;
+    }
+
+    if(typeof el.click === 'function'){
+      try { el.click(); } catch(e) {}
+    }
+  }
+
   window.AscensionMobile={
+    nativeTap(cssX,cssY){ nativeTap(cssX,cssY); },
     onState(raw){ state={...state,...parse(raw)}; render(); },
     onEvent(raw){
       const e=parse(raw);

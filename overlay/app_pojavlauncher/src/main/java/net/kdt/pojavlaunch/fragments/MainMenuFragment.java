@@ -86,6 +86,8 @@ public class MainMenuFragment extends Fragment {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
 
         webView.setBackgroundColor(0xFF090A0E);
         webView.setFocusable(true);
@@ -97,16 +99,43 @@ public class MainMenuFragment extends Fragment {
 
         // Pojav has parent containers that can intercept gestures. Keep the gesture
         // inside the launcher WebView until the finger is released.
+        final float[] ascensionDown = new float[2];
         webView.setOnTouchListener((v, event) -> {
             v.requestFocus();
-            if (v.getParent() != null) {
-                int action = event.getActionMasked();
+
+            // Disallow interception through every ancestor, not just the first parent.
+            android.view.ViewParent parent = v.getParent();
+            int action = event.getActionMasked();
+            while (parent != null) {
                 if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
-                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    parent.requestDisallowInterceptTouchEvent(true);
                 } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    parent.requestDisallowInterceptTouchEvent(false);
+                }
+                parent = parent.getParent();
+            }
+
+            if (action == MotionEvent.ACTION_DOWN) {
+                ascensionDown[0] = event.getX();
+                ascensionDown[1] = event.getY();
+            } else if (action == MotionEvent.ACTION_UP) {
+                float dx = event.getX() - ascensionDown[0];
+                float dy = event.getY() - ascensionDown[1];
+                // Only synthesize a DOM tap when it was actually a tap, not a scroll.
+                if ((dx * dx + dy * dy) < 900f) {
+                    float pageScale = webView.getScale();
+                    if (pageScale <= 0f) pageScale = 1f;
+                    float cssX = event.getX() / pageScale;
+                    float cssY = event.getY() / pageScale;
+                    final String js = "window.AscensionMobile && window.AscensionMobile.nativeTap("
+                            + cssX + "," + cssY + ")";
+                    webView.postDelayed(() -> {
+                        if (webView != null) webView.evaluateJavascript(js, null);
+                    }, 40);
                 }
             }
+            // Keep returning false so WebView's native scrolling, input focus and clicks
+            // continue to work; nativeTap is only a fallback.
             return false;
         });
 
