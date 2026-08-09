@@ -28,7 +28,7 @@ jobs:
       - name: Apply Ascension patches
         run: |
           python3 tools/apply_ascension.py Amethyst-Android
-          python3 tools/apply_fullscreen.py Amethyst-Android
+          python3 tools/apply_fit.py Amethyst-Android
 
       - name: Get bundled JRE 8 required by upstream build
         uses: dawidd6/action-download-artifact@v9
