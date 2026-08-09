@@ -1873,4 +1873,419 @@ if build_gradle_path.is_file():
 
 print("[Ascension v0.23] release uwillzard mobile + config/options uma vez + mods por SHA-256 + nome final OK")
 
+# ---------------------------------------------------------------------
+# 11) v0.24 - Perfis COMPLETOS de desempenho para Pixelmon mobile.
+# ---------------------------------------------------------------------
+index = index_path.read_text(encoding="utf-8")
+index = index.replace(
+    '<h3>Resolução interna do jogo</h3>',
+    '<h3>Perfil de desempenho do Pixelmon</h3>',
+    1
+)
+index = index.replace(
+    '<p>Reduz a carga da GPU sem mudar o tamanho da interface. Menor resolução costuma dar mais FPS e menos aquecimento.</p>',
+    '<p>Cada perfil ajusta resolução, FPS, distância, partículas e o modo de desempenho do Android/Pojav para reduzir travadas.</p>',
+    1
+)
+index = index.replace('LISO · 65%', 'LISO · 50% / 45 FPS')
+index = index.replace('EQUILIBRADO · 75%', 'EQUILIBRADO · 60% / 60 FPS')
+index = index.replace('QUALIDADE · 90%', 'QUALIDADE · 75% / 60 FPS')
+index = index.replace('NATIVO · 100%', 'NATIVO · 100% / 60 FPS')
+index_path.write_text(index, encoding="utf-8")
+
+styles = styles_path.read_text(encoding="utf-8")
+if "/* v0.24 - PERFORMANCE PROFILES */" not in styles:
+    styles += r"""
+
+/* v0.24 - PERFORMANCE PROFILES */
+.performance-preset{
+  font-size:5.1px!important;
+  letter-spacing:.01em!important;
+}
+.performance-value{
+  font-size:10.5px!important;
+}
+"""
+    styles_path.write_text(styles, encoding="utf-8")
+
+appjs = app_js_path.read_text(encoding="utf-8")
+appjs = appjs.replace(
+    "memoryMaxMb:6144,resolutionPercent:75};",
+    "memoryMaxMb:6144,resolutionPercent:60,performanceProfile:'balanced',performanceFps:60};",
+    1
+)
+
+old_render = r"""  function renderPerformance(){
+    const value=Math.max(25,Math.min(100,Number(state.resolutionPercent)||75));
+    const label=$('#resolutionValue');
+    if(label) label.textContent=value+'%';
+
+    const presets=[
+      ['#perfSmooth',65],
+      ['#perfBalanced',75],
+      ['#perfQuality',90],
+      ['#perfNative',100]
+    ];
+    presets.forEach(([selector,preset])=>{
+      const el=$(selector);
+      if(!el) return;
+      el.classList.toggle('active',Math.abs(value-preset)<3);
+    });
+  }
+
+  function saveResolution(percent){
+    let value=Math.max(25,Math.min(100,Math.round((Number(percent)||75)/5)*5));
+    const saved=call('setResolutionPercent',value);
+    if(typeof saved==='number' && saved>=25) value=saved;
+    state.resolutionPercent=value;
+    renderPerformance();
+    toast(`Resolução interna: ${value}%`,'success');
+  }
+
+"""
+new_render = r"""  function renderPerformance(){
+    const value=Math.max(25,Math.min(100,Number(state.resolutionPercent)||60));
+    const fps=Math.max(30,Number(state.performanceFps)||60);
+    const profile=String(state.performanceProfile||'balanced').toLowerCase();
+    const label=$('#resolutionValue');
+    if(label) label.textContent=value+'% · '+fps+' FPS';
+
+    const presets=[
+      ['#perfSmooth','smooth'],
+      ['#perfBalanced','balanced'],
+      ['#perfQuality','quality'],
+      ['#perfNative','native']
+    ];
+    presets.forEach(([selector,name])=>{
+      const el=$(selector);
+      if(!el) return;
+      el.classList.toggle('active',profile===name);
+    });
+  }
+
+  function applyPerformanceProfile(profile){
+    const name=String(profile||'balanced').toLowerCase();
+    call('setPerformanceProfile',name);
+    state.performanceProfile=name;
+
+    if(name==='smooth'){
+      state.resolutionPercent=50;
+      state.performanceFps=45;
+    }else if(name==='quality'){
+      state.resolutionPercent=75;
+      state.performanceFps=60;
+    }else if(name==='native'){
+      state.resolutionPercent=100;
+      state.performanceFps=60;
+    }else{
+      state.performanceProfile='balanced';
+      state.resolutionPercent=60;
+      state.performanceFps=60;
+    }
+
+    renderPerformance();
+    const titles={smooth:'Liso',balanced:'Equilibrado',quality:'Qualidade',native:'Nativo'};
+    toast(`Perfil ${titles[state.performanceProfile]||'Equilibrado'} aplicado`,'success');
+  }
+
+"""
+if old_render not in appjs:
+    raise SystemExit("[Ascension v0.24] funções v0.21 de desempenho não encontradas")
+appjs = appjs.replace(old_render, new_render, 1)
+
+replacements = {
+    "if(el.id === 'perfSmooth'){ saveResolution(65); return true; }": "if(el.id === 'perfSmooth'){ applyPerformanceProfile('smooth'); return true; }",
+    "if(el.id === 'perfBalanced'){ saveResolution(75); return true; }": "if(el.id === 'perfBalanced'){ applyPerformanceProfile('balanced'); return true; }",
+    "if(el.id === 'perfQuality'){ saveResolution(90); return true; }": "if(el.id === 'perfQuality'){ applyPerformanceProfile('quality'); return true; }",
+    "if(el.id === 'perfNative'){ saveResolution(100); return true; }": "if(el.id === 'perfNative'){ applyPerformanceProfile('native'); return true; }",
+    "bindTap($('#perfSmooth'),()=>saveResolution(65));": "bindTap($('#perfSmooth'),()=>applyPerformanceProfile('smooth'));",
+    "bindTap($('#perfBalanced'),()=>saveResolution(75));": "bindTap($('#perfBalanced'),()=>applyPerformanceProfile('balanced'));",
+    "bindTap($('#perfQuality'),()=>saveResolution(90));": "bindTap($('#perfQuality'),()=>applyPerformanceProfile('quality'));",
+    "bindTap($('#perfNative'),()=>saveResolution(100));": "bindTap($('#perfNative'),()=>applyPerformanceProfile('native'));",
+}
+for old, new in replacements.items():
+    if old not in appjs:
+        raise SystemExit("[Ascension v0.24] binding de perfil não encontrado: " + old)
+    appjs = appjs.replace(old, new, 1)
+app_js_path.write_text(appjs, encoding="utf-8")
+
+fragment = fragment_path.read_text(encoding="utf-8")
+state_anchor = '                o.put("resolutionPercent", currentResolutionPercent());\n'
+if 'o.put("performanceProfile"' not in fragment:
+    if state_anchor not in fragment:
+        raise SystemExit("[Ascension v0.24] estado de resolução não encontrado")
+    fragment = fragment.replace(
+        state_anchor,
+        state_anchor
+        + '                o.put("performanceProfile", currentPerformanceProfile());\n'
+        + '                o.put("performanceFps", performanceFps(currentPerformanceProfile()));\n',
+        1
+    )
+
+bridge_anchor = "        @JavascriptInterface public void prepare() { begin(false); }\n"
+if "public String setPerformanceProfile(" not in fragment:
+    bridge = """        @JavascriptInterface
+        public String setPerformanceProfile(String requestedProfile) {
+            String profile = normalizePerformanceProfile(requestedProfile);
+            applyPerformanceProfile(profile, true);
+            sendState();
+            return profile;
+        }
+
+"""
+    if bridge_anchor not in fragment:
+        raise SystemExit("[Ascension v0.24] ponte prepare não encontrada")
+    fragment = fragment.replace(bridge_anchor, bridge + bridge_anchor, 1)
+
+helper_anchor = "    private void begin(boolean launchAfter) {\n"
+if "private String normalizePerformanceProfile(" not in fragment:
+    helpers = r'''    private String normalizePerformanceProfile(String value) {
+        if ("smooth".equalsIgnoreCase(value)) return "smooth";
+        if ("quality".equalsIgnoreCase(value)) return "quality";
+        if ("native".equalsIgnoreCase(value)) return "native";
+        return "balanced";
+    }
+
+    private String currentPerformanceProfile() {
+        if (prefs == null) return "balanced";
+        return normalizePerformanceProfile(prefs.getString("performance_profile_v024", "balanced"));
+    }
+
+    private int performanceResolution(String profile) {
+        switch (normalizePerformanceProfile(profile)) {
+            case "smooth": return 50;
+            case "quality": return 75;
+            case "native": return 100;
+            default: return 60;
+        }
+    }
+
+    private int performanceFps(String profile) {
+        return "smooth".equals(normalizePerformanceProfile(profile)) ? 45 : 60;
+    }
+
+    private int performanceRenderDistance(String profile) {
+        switch (normalizePerformanceProfile(profile)) {
+            case "smooth": return 6;
+            case "quality": return 10;
+            case "native": return 12;
+            default: return 8;
+        }
+    }
+
+    private int performanceSimulationDistance(String profile) {
+        switch (normalizePerformanceProfile(profile)) {
+            case "smooth": return 5;
+            case "quality": return 8;
+            case "native": return 10;
+            default: return 6;
+        }
+    }
+
+    private String performanceEntityDistance(String profile) {
+        switch (normalizePerformanceProfile(profile)) {
+            case "smooth": return "0.5";
+            case "quality":
+            case "native": return "1.0";
+            default: return "0.75";
+        }
+    }
+
+    private String performanceOptionValue(String key, String profile) {
+        String p = normalizePerformanceProfile(profile);
+        if ("maxFps".equals(key)) return Integer.toString(performanceFps(p));
+        if ("renderDistance".equals(key)) return Integer.toString(performanceRenderDistance(p));
+        if ("simulationDistance".equals(key)) return Integer.toString(performanceSimulationDistance(p));
+        if ("entityDistanceScaling".equals(key)) return performanceEntityDistance(p);
+        if ("enableVsync".equals(key)) return "false";
+        if ("particles".equals(key)) {
+            if ("smooth".equals(p)) return "2";
+            if ("balanced".equals(p)) return "1";
+            return "0";
+        }
+        if ("mipmapLevels".equals(key)) {
+            if ("smooth".equals(p)) return "1";
+            if ("balanced".equals(p)) return "2";
+            if ("quality".equals(p)) return "3";
+            return "4";
+        }
+        if ("biomeBlendRadius".equals(key)) {
+            if ("smooth".equals(p)) return "0";
+            if ("balanced".equals(p)) return "1";
+            if ("quality".equals(p)) return "2";
+            return "3";
+        }
+        if ("graphicsMode".equals(key)) {
+            if ("smooth".equals(p) || "balanced".equals(p)) return "0";
+            return "1";
+        }
+        if ("entityShadows".equals(key)) {
+            return ("smooth".equals(p) || "balanced".equals(p)) ? "false" : "true";
+        }
+        return null;
+    }
+
+    private void applyMinecraftVideoProfile(String profile) {
+        File gameDir = new File(Tools.DIR_GAME_HOME, AscensionConfig.GAME_DIR_NAME);
+        File options = new File(gameDir, "options.txt");
+        if (!options.isFile() || options.length() <= 0) return;
+
+        File temp = new File(gameDir, "options.performance.tmp");
+        File backup = new File(gameDir, "options.performance.old");
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(options))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                int colon = line.indexOf(':');
+                if (colon > 0) {
+                    String key = line.substring(0, colon);
+                    String value = performanceOptionValue(key, profile);
+                    if (value != null) line = key + ":" + value;
+                }
+                lines.add(line);
+            }
+        } catch (Exception ignored) {
+            return;
+        }
+
+        try (java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(temp, false))) {
+            for (String line : lines) {
+                writer.write(line);
+                writer.newLine();
+            }
+        } catch (Exception ignored) {
+            temp.delete();
+            return;
+        }
+
+        if (backup.exists()) backup.delete();
+        if (!options.renameTo(backup)) {
+            temp.delete();
+            return;
+        }
+
+        boolean committed = false;
+        try {
+            if (temp.renameTo(options)) committed = true;
+        } finally {
+            if (!committed) {
+                temp.delete();
+                options.delete();
+                backup.renameTo(options);
+            } else {
+                backup.delete();
+            }
+        }
+    }
+
+    private void applyPerformanceProfile(String requestedProfile, boolean persistProfile) {
+        String profile = normalizePerformanceProfile(requestedProfile);
+        int resolution = performanceResolution(profile);
+        Context context = getContext();
+        SharedPreferences gamePrefs = LauncherPreferences.DEFAULT_PREF;
+        if (gamePrefs == null && context != null) {
+            gamePrefs = PreferenceManager.getDefaultSharedPreferences(context);
+        }
+
+        if (gamePrefs != null) {
+            gamePrefs.edit()
+                    .putInt("resolutionRatio", resolution)
+                    .putBoolean("sustainedPerformance", true)
+                    .putBoolean("alternate_surface", true)
+                    .putBoolean("force_vsync", false)
+                    .putBoolean("vsync_in_zink", false)
+                    .putBoolean("dump_shaders", false)
+                    .putBoolean("bigCoreAffinity", false)
+                    .putBoolean("zinkPreferSystemDriver", false)
+                    .putString("mg_renderer_setting_glsl_cache_size", "256")
+                    .putString("mg_renderer_setting_multidraw", "0")
+                    .putString("mg_renderer_setting_errorSetting", "0")
+                    .putString("mg_renderer_setting_fsr", "0")
+                    .commit();
+        }
+
+        LauncherPreferences.PREF_SCALE_FACTOR = resolution / 100f;
+        LauncherPreferences.PREF_SUSTAINED_PERFORMANCE = true;
+        LauncherPreferences.PREF_USE_ALTERNATE_SURFACE = true;
+        LauncherPreferences.PREF_FORCE_VSYNC = false;
+        LauncherPreferences.PREF_VSYNC_IN_ZINK = false;
+        LauncherPreferences.PREF_DUMP_SHADERS = false;
+        LauncherPreferences.PREF_BIG_CORE_AFFINITY = false;
+        LauncherPreferences.PREF_ZINK_PREFER_SYSTEM_DRIVER = false;
+
+        if (persistProfile && prefs != null) {
+            prefs.edit()
+                    .putString("performance_profile_v024", profile)
+                    .putBoolean("performance_v024_initialized", true)
+                    .commit();
+        }
+
+        applyMinecraftVideoProfile(profile);
+        try {
+            LauncherPreferences.writeMGRendererSettings();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void ensurePerformanceProfileV024() {
+        if (prefs == null) return;
+        if (!prefs.getBoolean("performance_v024_initialized", false)) {
+            prefs.edit()
+                    .putString("performance_profile_v024", "balanced")
+                    .putBoolean("performance_v024_initialized", true)
+                    .commit();
+        }
+        applyPerformanceProfile(currentPerformanceProfile(), false);
+    }
+
+'''
+    if helper_anchor not in fragment:
+        raise SystemExit("[Ascension v0.24] ponto para helpers não encontrado")
+    fragment = fragment.replace(helper_anchor, helpers + helper_anchor, 1)
+
+load_anchor = '        ensureAscensionPerformanceDefaults();\n        webView.loadUrl("file:///android_asset/ui/index.html");\n'
+if "ensurePerformanceProfileV024();" not in fragment:
+    if load_anchor not in fragment:
+        raise SystemExit("[Ascension v0.24] ponto de inicialização não encontrado")
+    fragment = fragment.replace(
+        load_anchor,
+        '        ensureAscensionPerformanceDefaults();\n        ensurePerformanceProfileV024();\n        webView.loadUrl("file:///android_asset/ui/index.html");\n',
+        1
+    )
+
+begin_anchor = '''    private void begin(boolean launchAfter) {
+        String nick = prefs.getString("nick", "");
+'''
+if begin_anchor not in fragment:
+    raise SystemExit("[Ascension v0.24] begin não encontrado")
+fragment = fragment.replace(
+    begin_anchor,
+    '''    private void begin(boolean launchAfter) {
+        applyPerformanceProfile(currentPerformanceProfile(), false);
+        String nick = prefs.getString("nick", "");
+''',
+    1
+)
+
+launch_anchor = '''    private void launchGame(String versionId) {
+        main.post(() -> {
+            try {
+'''
+if launch_anchor not in fragment:
+    raise SystemExit("[Ascension v0.24] launchGame não encontrado")
+fragment = fragment.replace(
+    launch_anchor,
+    '''    private void launchGame(String versionId) {
+        main.post(() -> {
+            try {
+                applyPerformanceProfile(currentPerformanceProfile(), false);
+''',
+    1
+)
+
+fragment_path.write_text(fragment, encoding="utf-8")
+print("[Ascension v0.24] perfis completos: runtime + resolução + FPS + options Minecraft + térmico OK")
+
+
 
