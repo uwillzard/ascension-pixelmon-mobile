@@ -177,6 +177,15 @@ def run_fullscreen_patch(repo_root: Path, source: Path) -> None:
     print("[Ascension patch] Correção compacta/fullscreen aplicada.")
 
 
+def run_fit_patch(repo_root: Path, source: Path) -> None:
+    fit = repo_root / "tools" / "apply_fit.py"
+    if not fit.is_file():
+        fail("tools/apply_fit.py não encontrado")
+    print("[Ascension patch] Aplicando viewport sincronizado v0.17...")
+    subprocess.check_call([sys.executable, str(fit), str(source)])
+    print("[Ascension patch] Viewport sincronizado v0.17 aplicado.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aplica o Ascension Pixelmon Mobile sobre Amethyst-Android")
     parser.add_argument("source", type=Path, help="pasta do clone AngelAuraMC/Amethyst-Android")
@@ -198,9 +207,8 @@ def main() -> None:
     clean_launcher_icons(source)
     copy_overlay(repo_root, source)
 
-    # v0.14: this is now mandatory and runs even if the GitHub Actions YAML
-    # still calls only apply_ascension.py.
     run_fullscreen_patch(repo_root, source)
+    run_fit_patch(repo_root, source)
 
     print("[Ascension patch] OK")
     print("Base:", head or "sem git")
