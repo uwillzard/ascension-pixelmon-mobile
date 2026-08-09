@@ -38,6 +38,7 @@ import java.net.Socket;
 import java.util.Locale;
 
 public class MainMenuFragment extends Fragment {
+    public static final String TAG = "MainMenuFragment";
     private WebView webView;
     private SharedPreferences prefs;
     private final Handler main = new Handler(Looper.getMainLooper());

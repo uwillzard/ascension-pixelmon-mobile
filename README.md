@@ -85,12 +85,12 @@ The GitHub Actions route is recommended because it reproduces Amethyst's own bui
 The integration currently uses:
 
 ```text
-https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/mods.zip
-https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/config.zip
-https://github.com/uwillzard/ascension-pixelmon-modpack/releases/download/v1.0.0/options.txt
+https://github.com/uwillzard/ascension-pixelmon-modpack/releases/latest/download/mods.zip
+https://github.com/uwillzard/ascension-pixelmon-modpack/releases/latest/download/config.zip
+https://github.com/uwillzard/ascension-pixelmon-modpack/releases/latest/download/options.txt
 ```
 
-and checks the fixed `v1.0.0` release API for the `mods.zip` asset digest, preserving the same stable asset URL used by the PC launcher.
+and checks the latest release API for the `mods.zip` asset digest.
 
 ## First-run behavior
 

@@ -77,7 +77,7 @@ def patch_minecraft_downloader(root: Path) -> None:
 def patch_jre_utils(root: Path) -> None:
     path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/utils/JREUtils.java"
     old = '''        Tools.fullyExit();\n    }\n\n    /**\n     *  Gives an argument list filled with both the user args'''
-    new = '''        // Ascension invokes the NeoForge installer from inside the launcher. In this special\n        // flow, return to LauncherActivity instead of terminating the entire launcher process.\n        if (activity.getIntent().getBoolean("ascension_return_after_vm", false)) {\n            activity.runOnUiThread(() -> {\n                activity.setResult(Activity.RESULT_OK);\n                activity.finish();\n            });\n            return;\n        }\n        Tools.fullyExit();\n    }\n\n    /**\n     *  Gives an argument list filled with both the user args'''
+    new = '''        // Ascension invokes the NeoForge installer from inside the launcher. In this special\n        // flow, return to LauncherActivity instead of terminating the entire launcher process.\n        if (activity.getIntent().getBooleanExtra("ascension_return_after_vm", false)) {\n            activity.runOnUiThread(() -> {\n                activity.setResult(Activity.RESULT_OK);\n                activity.finish();\n            });\n            return;\n        }\n        Tools.fullyExit();\n    }\n\n    /**\n     *  Gives an argument list filled with both the user args'''
     text = path.read_text(encoding="utf-8")
     if "ascension_return_after_vm" in text:
         return
