@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -65,7 +66,7 @@ public class MainMenuFragment extends Fragment {
         super(R.layout.fragment_ascension_launcher);
     }
 
-    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface", "ClickableViewAccessibility"})
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -74,6 +75,7 @@ public class MainMenuFragment extends Fragment {
         if (webView == null) {
             throw new IllegalStateException("Ascension WebView ausente no layout fragment_ascension_launcher");
         }
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -81,7 +83,33 @@ public class MainMenuFragment extends Fragment {
         settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+
         webView.setBackgroundColor(0xFF090A0E);
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+        webView.setClickable(true);
+        webView.setLongClickable(true);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.requestFocus(View.FOCUS_DOWN);
+
+        // Pojav has parent containers that can intercept gestures. Keep the gesture
+        // inside the launcher WebView until the finger is released.
+        webView.setOnTouchListener((v, event) -> {
+            v.requestFocus();
+            if (v.getParent() != null) {
+                int action = event.getActionMasked();
+                if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                }
+            }
+            return false;
+        });
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -97,12 +125,16 @@ public class MainMenuFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (webView != null) {
+            webView.requestFocus(View.FOCUS_DOWN);
+        }
         sendState();
     }
 
     @Override
     public void onDestroyView() {
         if (webView != null) {
+            webView.setOnTouchListener(null);
             webView.removeJavascriptInterface("AscensionAndroid");
             webView.destroy();
             webView = null;
@@ -148,15 +180,8 @@ public class MainMenuFragment extends Fragment {
             sendState();
         }
 
-        @JavascriptInterface
-        public void prepare() {
-            begin(false);
-        }
-
-        @JavascriptInterface
-        public void play() {
-            begin(true);
-        }
+        @JavascriptInterface public void prepare() { begin(false); }
+        @JavascriptInterface public void play() { begin(true); }
 
         @JavascriptInterface
         public void repair() {
@@ -165,20 +190,9 @@ public class MainMenuFragment extends Fragment {
             sendState();
         }
 
-        @JavascriptInterface
-        public void openWebsite() {
-            openUrl(AscensionConfig.WEBSITE);
-        }
-
-        @JavascriptInterface
-        public void openDiscord() {
-            openUrl(AscensionConfig.DISCORD);
-        }
-
-        @JavascriptInterface
-        public void checkServer() {
-            checkServerAsync();
-        }
+        @JavascriptInterface public void openWebsite() { openUrl(AscensionConfig.WEBSITE); }
+        @JavascriptInterface public void openDiscord() { openUrl(AscensionConfig.DISCORD); }
+        @JavascriptInterface public void checkServer() { checkServerAsync(); }
     }
 
     private void begin(boolean launchAfter) {
@@ -203,10 +217,7 @@ public class MainMenuFragment extends Fragment {
 
     private AscensionBootstrap createBootstrap() {
         return new AscensionBootstrap(requireActivity(), new AscensionBootstrap.Listener() {
-            @Override
-            public void onStatus(String message, int percent) {
-                sendEvent("progress", message, percent);
-            }
+            @Override public void onStatus(String message, int percent) { sendEvent("progress", message, percent); }
 
             @Override
             public void onNeoForgeInstallerReady(File installer) {
@@ -260,15 +271,13 @@ public class MainMenuFragment extends Fragment {
                 socket.connect(new InetSocketAddress(AscensionConfig.SERVER_HOST, AscensionConfig.SERVER_PORT), 3500);
                 online = true;
                 ms = System.currentTimeMillis() - start;
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
             try {
                 JSONObject o = new JSONObject();
                 o.put("online", online);
                 o.put("ping", ms);
                 sendJs("window.AscensionMobile && window.AscensionMobile.onServer(" + JSONObject.quote(o.toString()) + ")");
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         });
     }
 
@@ -285,14 +294,11 @@ public class MainMenuFragment extends Fragment {
             o.put("message", message == null ? "" : message);
             if (progress >= 0) o.put("progress", progress);
             sendJs("window.AscensionMobile && window.AscensionMobile.onEvent(" + JSONObject.quote(o.toString()) + ")");
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
     }
 
     private void sendJs(String script) {
-        main.post(() -> {
-            if (webView != null) webView.evaluateJavascript(script, null);
-        });
+        main.post(() -> { if (webView != null) webView.evaluateJavascript(script, null); });
     }
 
     private void openUrl(String url) {

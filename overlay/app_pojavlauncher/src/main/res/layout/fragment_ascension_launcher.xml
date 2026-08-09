@@ -2,12 +2,18 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/main_menu_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:clickable="false"
+    android:focusable="false">
 
     <WebView
         android:id="@+id/ascension_webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#090b12" />
+        android:background="#090A0E"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:longClickable="true" />
 
 </FrameLayout>

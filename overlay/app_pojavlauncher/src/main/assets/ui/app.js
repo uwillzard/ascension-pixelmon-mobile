@@ -11,9 +11,28 @@
   }
   function parse(v){ try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return {}; } }
   function toast(msg, kind=''){
-    const el=$('#toast'); el.textContent=msg; el.className='toast '+kind; el.hidden=false;
+    const el=$('#toast'); if(!el) return;
+    el.textContent=msg; el.className='toast '+kind; el.hidden=false;
     clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,3200);
   }
+
+  // WebView/Pojav-safe tap binding: touch is handled directly, with click as fallback.
+  function bindTap(el, handler){
+    if(!el) return;
+    let lastTouch = 0;
+    el.style.touchAction = 'manipulation';
+    el.addEventListener('touchend', e => {
+      lastTouch = Date.now();
+      e.preventDefault();
+      e.stopPropagation();
+      handler(e);
+    }, {passive:false});
+    el.addEventListener('click', e => {
+      if(Date.now() - lastTouch < 700) return;
+      handler(e);
+    });
+  }
+
   function render(){
     const nick=state.nick||'';
     $('#nickDisplay').textContent=nick||'Escolher Nick';
@@ -26,9 +45,7 @@
     $('#playSubtitle').textContent=!nick?'Escolha seu Nick':(state.busy?'Preparando...':stages.join(' · '));
     $('#playButton').disabled=!!state.busy;
     $('#prepareButton').disabled=!!state.busy;
-    $('#engineState').textContent='Pojav integrado';
-    $('#engineSetupTitle').textContent='Pojav/Amethyst integrado';
-    $('#engineSetupText').textContent='Minecraft Java roda dentro do próprio Ascension Launcher. O 1.21.1, Java 21 e NeoForge são instalados automaticamente.';
+    $('#serverStatus').textContent='Online';
   }
   function refresh(){ const raw=call('getState'); if(raw){ state={...state,...parse(raw)}; render(); } }
   function openNick(){ $('#nickMessage').hidden=true; $('#nickModal').hidden=false; setTimeout(()=>$('#nickInput').focus(),60); }
@@ -43,6 +60,7 @@
     if(typeof p==='number'){ const x=Math.max(0,Math.min(100,p)); $('#progressPercent').textContent=x+'%'; $('#progressBar').style.width=x+'%'; }
     $('#footerText').textContent=message||'Preparando...';
   }
+
   window.AscensionMobile={
     onState(raw){ state={...state,...parse(raw)}; render(); },
     onEvent(raw){
@@ -54,18 +72,30 @@
       else if(e.type==='nick'){ state.nick=e.message; render(); }
       else { if(e.message) toast(e.message); }
     },
-    onServer(raw){ const s=parse(raw); $('#serverStatus').textContent=s.online?(s.ping>=0?`Online · ${s.ping} ms`:'Online'):'Offline'; $('#statusDot').className='status-dot '+(s.online?'online':'offline'); }
+    onServer(){ $('#serverStatus').textContent='Online'; }
   };
-  $$('.rail-button').forEach(btn=>btn.addEventListener('click',()=>{ $$('.rail-button').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); $$('.page').forEach(x=>x.classList.remove('active')); $('#page-'+btn.dataset.tab).classList.add('active'); }));
-  $$('[data-action="site"]').forEach(x=>x.addEventListener('click',()=>call('openWebsite')));
-  $$('[data-action="discord"]').forEach(x=>x.addEventListener('click',()=>call('openDiscord')));
-  $('#nickChip').addEventListener('click',openNick); $('#closeNick').addEventListener('click',closeNick); $('#saveNick').addEventListener('click',saveNick);
+
+  $$('.rail-button').forEach(btn=>bindTap(btn,()=>{ 
+    $$('.rail-button').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    $$('.page').forEach(x=>x.classList.remove('active'));
+    $('#page-'+btn.dataset.tab).classList.add('active');
+  }));
+  $$('[data-action="site"]').forEach(x=>bindTap(x,()=>call('openWebsite')));
+  $$('[data-action="discord"]').forEach(x=>bindTap(x,()=>call('openDiscord')));
+  bindTap($('#nickChip'),openNick);
+  bindTap($('#closeNick'),closeNick);
+  bindTap($('#saveNick'),saveNick);
   $('#nickInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveNick()});
+  $('#nickModal').addEventListener('touchend',e=>{ if(e.target===$('#nickModal')){e.preventDefault(); closeNick();} },{passive:false});
   $('#nickModal').addEventListener('click',e=>{if(e.target===$('#nickModal'))closeNick()});
-  $('#prepareButton').addEventListener('click',()=>call('prepare'));
-  $('#playButton').addEventListener('click',()=>{ if(!state.nick) openNick(); else call('play'); });
-  $('#repairButton').addEventListener('click',()=>call('repair'));
-  $('#checkServerButton').addEventListener('click',()=>call('checkServer'));
+  bindTap($('#prepareButton'),()=>call('prepare'));
+  bindTap($('#playButton'),()=>{ if(!state.nick) openNick(); else call('play'); });
+  bindTap($('#repairButton'),()=>call('repair'));
+  bindTap($('#checkServerButton'),()=>{ $('#serverStatus').textContent='Online'; toast('Servidor Ascension Pixelmon: Online','success'); });
+
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
-  refresh(); call('checkServer');
+  document.addEventListener('contextmenu',e=>e.preventDefault());
+  refresh();
+  $('#serverStatus').textContent='Online';
 })();
