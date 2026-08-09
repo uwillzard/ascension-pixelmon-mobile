@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 PINNED_COMMIT = "4cf805a93124269b47f8a4ba27fcce36b79ab5ef"
@@ -31,7 +32,9 @@ def replace_all_required(path: Path, old: str, new: str) -> None:
 def git_head(root: Path) -> str | None:
     try:
         return subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL
         ).strip()
     except Exception:
         return None
@@ -76,8 +79,25 @@ def patch_minecraft_downloader(root: Path) -> None:
 
 def patch_jre_utils(root: Path) -> None:
     path = root / "app_pojavlauncher/src/main/java/net/kdt/pojavlaunch/utils/JREUtils.java"
-    old = '''        Tools.fullyExit();\n    }\n\n    /**\n     *  Gives an argument list filled with both the user args'''
-    new = '''        // Ascension invokes the NeoForge installer from inside the launcher. In this special\n        // flow, return to LauncherActivity instead of terminating the entire launcher process.\n        if (activity.getIntent().getBooleanExtra("ascension_return_after_vm", false)) {\n            activity.runOnUiThread(() -> {\n                activity.setResult(Activity.RESULT_OK);\n                activity.finish();\n            });\n            return;\n        }\n        Tools.fullyExit();\n    }\n\n    /**\n     *  Gives an argument list filled with both the user args'''
+    old = '''        Tools.fullyExit();
+    }
+
+    /**
+     *  Gives an argument list filled with both the user args'''
+    new = '''        // Ascension invokes the NeoForge installer from inside the launcher. In this special
+        // flow, return to LauncherActivity instead of terminating the entire launcher process.
+        if (activity.getIntent().getBooleanExtra("ascension_return_after_vm", false)) {
+            activity.runOnUiThread(() -> {
+                activity.setResult(Activity.RESULT_OK);
+                activity.finish();
+            });
+            return;
+        }
+        Tools.fullyExit();
+    }
+
+    /**
+     *  Gives an argument list filled with both the user args'''
     text = path.read_text(encoding="utf-8")
     if "ascension_return_after_vm" in text:
         return
@@ -103,7 +123,6 @@ def patch_branding(root: Path) -> None:
     text = gradle.read_text(encoding="utf-8")
     for old, new in replacements:
         if old not in text:
-            # It is fine when the script is re-run on an already patched tree.
             if new in text:
                 continue
             fail(f"branding pattern ausente em build.gradle: {old}")
@@ -149,6 +168,15 @@ def copy_overlay(repo_root: Path, source_root: Path) -> None:
         shutil.copy2(src, dst)
 
 
+def run_fullscreen_patch(repo_root: Path, source: Path) -> None:
+    fullscreen = repo_root / "tools" / "apply_fullscreen.py"
+    if not fullscreen.is_file():
+        fail("tools/apply_fullscreen.py não encontrado")
+    print("[Ascension patch] Aplicando correção compacta/fullscreen...")
+    subprocess.check_call([sys.executable, str(fullscreen), str(source)])
+    print("[Ascension patch] Correção compacta/fullscreen aplicada.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aplica o Ascension Pixelmon Mobile sobre Amethyst-Android")
     parser.add_argument("source", type=Path, help="pasta do clone AngelAuraMC/Amethyst-Android")
@@ -169,6 +197,10 @@ def main() -> None:
     patch_branding(source)
     clean_launcher_icons(source)
     copy_overlay(repo_root, source)
+
+    # v0.14: this is now mandatory and runs even if the GitHub Actions YAML
+    # still calls only apply_ascension.py.
+    run_fullscreen_patch(repo_root, source)
 
     print("[Ascension patch] OK")
     print("Base:", head or "sem git")
